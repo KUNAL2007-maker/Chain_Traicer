@@ -1,6 +1,8 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { AuthProvider } from "@/components/AuthProvider";
+import { TraceStoreProvider } from "@/lib/store";
 
 export const metadata: Metadata = {
   title: "CryptoTrace — SIH26183 · I4C Blockchain Forensics",
@@ -14,7 +16,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {/* AuthProvider must wrap the store: the store scopes every read and
+              write to the signed-in officer's uid, and resets when it changes. */}
+          <AuthProvider>
+            <TraceStoreProvider>{children}</TraceStoreProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -1,0 +1,97 @@
+# CryptoTrace (SIH26183) — Render blueprint
+#
+# Render → New → Blueprint → connect this repo. Render reads this file and
+# creates the service; the secrets below are marked `sync: false`, so it will
+# prompt for each one instead of storing them in git.
+#
+# ── The two things that break a first deploy ─────────────────────────────────
+#
+# 1. NEXT_PUBLIC_* vars are inlined into the browser bundle at BUILD time, not
+#    read at runtime. If the Firebase values are blank when the first build
+#    runs, the deployed app ships with Firebase disabled — it will boot and
+#    serve the demo, but there will be no login screen and nothing will
+#    persist, which looks exactly like a code bug. Fill them in when Render
+#    prompts, before the first build. Changing one later needs
+#    "Clear build cache & deploy", not a restart.
+#
+# 2. Firebase Auth rejects sign-in from an unknown origin. After the first
+#    deploy, add the Render hostname (e.g. sih26183-cryptotrace.onrender.com)
+#    under Firebase console → Authentication → Settings → Authorized domains.
+#
+# Also: `firestore.rules` in this repo is NOT deployed by Render. Publish it by
+# hand in the Firebase console, or Firestore stays on its default rules.
+#
+# One more thing worth knowing: the daily/monthly API quota ledgers in
+# `blockchain.ts` / `prices.ts` are in-memory and per-instance, so Render's free
+# plan spinning the service down resets them. They are a backstop, not the main
+# defence — the real protection is the per-second throttle, the 10-minute
+# address cache and the cheap seed-only probe behind the live-feed poll, all of
+# which work fine across restarts.
+
+services:
+  - type: web
+    name: sih26183-cryptotrace
+    runtime: node
+    # Closest Render region to India — the officers using this and the Firestore
+    # instance (asia-south1 / Mumbai) are both in-region, so keep them together.
+    region: singapore
+    plan: free
+    branch: main
+    autoDeploy: true
+
+    # `npm ci`, not `npm install`: it installs exactly what package-lock.json
+    # pins, so the deployed tree matches what was tested locally.
+    buildCommand: npm ci && npm run build
+    # `next start` reads Render's injected $PORT on its own, so no -p flag.
+    startCommand: npm start
+
+    # Render marks the deploy live only once this responds. "/" is the app
+    # shell, which renders without Firebase or any API key — so a health check
+    # failure means the build or the server is genuinely broken, not that a
+    # secret is missing.
+    healthCheckPath: /
+
+    envVars:
+      # Matches "engines": { "node": ">=22" } in package.json. Without this
+      # Render picks its own default, which has been older than 22.
+      - key: NODE_VERSION
+        value: "22"
+
+      # ── Firebase client config — needed at BUILD time (see note 1 above) ──
+      - key: NEXT_PUBLIC_FIREBASE_API_KEY
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_APP_ID
+        sync: false
+
+      # ── Server-side keys — read at runtime, safe to change with a restart ──
+      - key: ETHERSCAN_API_KEY
+        sync: false
+      - key: TRONGRID_API_KEY
+        sync: false
+      - key: COINGECKO_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # ── Optional knobs — leave them out unless you need them ──────────────
+      #
+      # COINGECKO_PRO: set to "true" ONLY for a paid Pro key. Demo and Pro keys
+      # both start with "CG-", so the app cannot tell them apart; a Demo key sent
+      # to the Pro host is rejected with HTTP 400 and prices quietly fall back to
+      # the static table — live-looking UI, stale numbers in the notice.
+      #
+      # ETHERSCAN_API_BASE: repoints the Etherscan host (a V1 fallback if V2 is
+      # ever retired). Defaults to https://api.etherscan.io/v2/api.
+      #
+      # - key: COINGECKO_PRO
+      #   value: "true"
+      # - key: ETHERSCAN_API_BASE
+      #   value: https://api.etherscan.io/v2/api

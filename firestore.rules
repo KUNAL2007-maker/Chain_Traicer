@@ -1,0 +1,36 @@
+// CryptoTrace (SIH26183) — Firestore security rules
+//
+// Paste into: Firebase console → Firestore Database → Rules → Publish.
+// Kept in the repo so the deployed rules are reviewable alongside the code,
+// but publishing is a manual step — nothing in this app deploys rules.
+//
+// The whole model is one rule, because every document this app writes lives
+// under the officer who owns it:
+//
+//   users/{uid}                     { email, fullName, createdAt }
+//   users/{uid}/meta/case           case metadata (single fixed doc)
+//   users/{uid}/meta/state          { activeTraceId }
+//   users/{uid}/traces/{traceId}    a completed trace
+//   users/{uid}/notices/{noticeId}  a drafted Sec 91 / Sec 94 notice
+//
+// Case files are private per officer by design (a locked decision, not an
+// oversight): one officer cannot read another's case. Cross-officer sharing
+// would need a supervisor role and an explicit grant, which is out of scope.
+//
+// Everything outside users/ is denied by the absence of a matching rule —
+// there is deliberately no catch-all allow.
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // An officer may read and write their own subtree, and nothing else.
+    // request.auth != null is checked explicitly rather than relying on the
+    // uid comparison alone: for an unauthenticated request request.auth is
+    // null, and reaching .uid on it would abort rule evaluation.
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

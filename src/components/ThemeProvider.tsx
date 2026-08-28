@@ -4,6 +4,12 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "dark" | "light";
 
+const STORAGE_KEY = "cryptotrace-theme";
+// The key this project inherited when it was forked from the FinGuard console.
+// Read once so an existing preference carries over instead of silently resetting
+// to dark; never written, so the old name disappears on the first toggle.
+const LEGACY_STORAGE_KEY = "finguard-theme";
+
 const ThemeCtx = createContext<{
   theme: Theme;
   toggle: () => void;
@@ -21,8 +27,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // Load persisted theme
   useEffect(() => {
-    const saved = (typeof window !== "undefined" &&
-      (localStorage.getItem("finguard-theme") as Theme | null)) || "dark";
+    const saved =
+      (typeof window !== "undefined" &&
+        ((localStorage.getItem(STORAGE_KEY) ??
+          localStorage.getItem(LEGACY_STORAGE_KEY)) as Theme | null)) ||
+      "dark";
     setTheme(saved);
     setLoaded(true);
   }, []);
@@ -34,7 +43,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement;
     root.classList.toggle("light", theme === "light");
     root.classList.toggle("dark", theme === "dark");
-    localStorage.setItem("finguard-theme", theme);
+    localStorage.setItem(STORAGE_KEY, theme);
   }, [theme, loaded]);
 
   return (

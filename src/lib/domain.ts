@@ -114,6 +114,18 @@ export type TraceResult = {
   source: "live" | "mock";
   generatedAt?: number;
   case?: CaseMeta;
+  /**
+   * True when at least one provider call failed, was rate-limited, or was
+   * skipped for quota, so the trail below may be incomplete.
+   *
+   * This exists because the dangerous failure in a forensic tool is not an
+   * error — it is a confident blank. An officer shown zero onward transfers
+   * concludes the money stopped moving; if the real cause was an exhausted API
+   * quota, that conclusion is wrong and nothing on screen says so.
+   */
+  degraded?: boolean;
+  /** Human-readable notes about what was missed or substituted, for the UI. */
+  warnings?: string[];
 };
 
 // ── Chat / agent panel types (I4C forensic panel) ───────────────────────────
