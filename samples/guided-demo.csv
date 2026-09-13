@@ -1,0 +1,31 @@
+date,from,to,bank,amount,currency,type,note
+2026-08-01,ACC-SAL-301,ACC-SAL-302,HDFC Bank,62000,INR,salary,monthly salary credit
+2026-08-01,ACC-SAL-301,ACC-SAL-303,HDFC Bank,58500,INR,salary,monthly salary credit
+2026-08-02,ACC-RET-311,ACC-RET-312,ICICI Bank,24500,INR,UPI,grocery store payment
+2026-08-02,ACC-RET-313,ACC-RET-312,ICICI Bank,18900,INR,UPI,electricity bill payment
+2026-08-03,ACC-EMI-321,ACC-EMI-322,State Bank of India,45000,INR,NACH,home loan EMI
+2026-08-03,ACC-EMI-323,ACC-EMI-322,State Bank of India,32000,INR,NACH,car loan EMI
+2026-08-04,ACC-EDU-331,ACC-EDU-332,Axis Bank,78000,INR,NEFT,semester tuition fee
+2026-08-04,ACC-EDU-331,ACC-EDU-333,Axis Bank,41500,INR,NEFT,hostel fee payment
+2026-08-05,ACC-BIZ-101,ACC-BIZ-102,HDFC Bank,480000,INR,NEFT,quarterly vendor settlement
+2026-08-05,ACC-BIZ-103,ACC-BIZ-102,ICICI Bank,325000,INR,NEFT,equipment purchase against invoice EQ-2210
+2026-08-06,ACC-TRD-201,ACC-TRD-202,Kotak Mahindra Bank,690000,INR,NEFT,advance against confirmed purchase order PO-8841
+2026-08-06,ACC-TRD-201,ACC-TRD-203,Kotak Mahindra Bank,245000,INR,NEFT,balance payment on delivered consignment
+2026-08-10,ACC-LAY-01,ACC-LAY-02,HDFC Bank,24000000,INR,RTGS,rapid layering hop 1 - funds placed
+2026-08-10,ACC-LAY-02,ACC-LAY-03,ICICI Bank,23600000,INR,RTGS,rapid layering hop 2 - onward transfer
+2026-08-10,ACC-LAY-03,ACC-LAY-04,Axis Bank,23150000,INR,RTGS,rapid layering hop 3 - onward transfer
+2026-08-10,ACC-LAY-04,ACC-LAY-05,Yes Bank,22700000,INR,RTGS,rapid layering hop 4 - onward transfer
+2026-08-10,ACC-LAY-05,ACC-LAY-06,Kotak Mahindra Bank,22200000,INR,RTGS,rapid layering hop 5 - final settlement
+2026-08-11,ACC-STR-HUB,ACC-STR-R1,State Bank of India,960000,INR,IMPS,payment split to stay below reporting limit
+2026-08-11,ACC-STR-HUB,ACC-STR-R2,Punjab National Bank,945000,INR,IMPS,structuring - second slice of the same invoice
+2026-08-11,ACC-STR-HUB,ACC-STR-R3,Bank of Baroda,980000,INR,IMPS,structuring - third slice of the same invoice
+2026-08-11,ACC-STR-HUB,ACC-STR-R4,Canara Bank,925000,INR,IMPS,structuring - fourth slice of the same invoice
+2026-08-11,ACC-STR-HUB,ACC-STR-R5,Union Bank of India,970000,INR,IMPS,structuring - fifth slice of the same invoice
+2026-08-12,ACC-MULE-F1,ACC-MULE-HUB,HDFC Bank,420000,INR,UPI,mule deposit from unrelated payer
+2026-08-12,ACC-MULE-F2,ACC-MULE-HUB,ICICI Bank,465000,INR,UPI,mule deposit from unrelated payer
+2026-08-12,ACC-MULE-F3,ACC-MULE-HUB,State Bank of India,435000,INR,UPI,mule deposit from unrelated payer
+2026-08-12,ACC-MULE-F4,ACC-MULE-HUB,Axis Bank,450000,INR,UPI,mule deposit from unrelated payer
+2026-08-12,ACC-MULE-F5,ACC-MULE-HUB,Kotak Mahindra Bank,405000,INR,UPI,mule deposit from unrelated payer
+2026-08-12,ACC-MULE-HUB,ACC-MULE-OUT,Yes Bank,2140000,INR,RTGS,mule network payout - single lump onward
+2026-08-13,ACC-OFF-IN,ACC-OFF-MID,Axis Bank,11500000,INR,RTGS,funds consolidated before offshore exit
+2026-08-13,ACC-OFF-MID,ACC-OFF-BENE,HSBC India,11200000,INR,SWIFT,offshore transfer to Singapore nominee account

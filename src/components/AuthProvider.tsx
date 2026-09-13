@@ -1,203 +1,181 @@
 "use client";
 
-/**
- * Session for the investigating officer.
- *
- * Two modes, decided once at startup by `firebaseReady`:
- *
- *   • CONFIGURED — real Firebase email/password auth. Each officer gets their own
- *     `users/{uid}` document tree; the login gate is enforced in app/page.tsx.
- *   • OFFLINE    — no NEXT_PUBLIC_FIREBASE_* vars, so we hand back a synthetic
- *     local officer and skip the gate entirely. This keeps the zero-config demo
- *     alive (a fresh clone, or a judge with no accounts) instead of showing a
- *     login form that could never succeed. `user.offline` tells the rest of the
- *     app that nothing will persist.
- *
- * Errors are RETURNED as `string | null`, never thrown, so the login form can
- * render them inline. The strings come from prettyAuthError, which maps Firebase
- * codes to the setup step that fixes them.
- *
- * Unlike the FinGuard console this was ported from, persistence is Firebase's
- * default (local) rather than session-scoped, and there is no force-sign-out on
- * reload — a case file you have to re-authenticate for on every refresh would
- * defeat the point of persisting it.
- */
-
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
-  useMemo,
   useState,
   type ReactNode,
 } from "react";
 import {
+  browserSessionPersistence,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  setPersistence,
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   updateProfile,
   type User,
 } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { auth, db, firebaseReady, prettyAuthError } from "@/lib/firebase";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 
 export type AppUser = {
   uid: string;
   email: string;
   fullName: string;
-  /** True when Firebase isn't configured — this is a local, non-persisted session. */
-  offline: boolean;
 };
 
 type AuthState = {
   user: AppUser | null;
   loading: boolean;
-  /** False when Firebase is unconfigured; the UI hides sign-out and warns instead. */
-  persistent: boolean;
   signUp: (email: string, password: string, fullName: string) => Promise<string | null>;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
 };
 
-/** The stand-in officer used when Firebase isn't configured. */
-const LOCAL_OFFICER: AppUser = {
-  uid: "local-demo",
-  email: "officer@i4c.gov.in",
-  fullName: "Investigating Officer",
-  offline: true,
-};
-
 const AuthCtx = createContext<AuthState>({
   user: null,
   loading: true,
-  persistent: false,
   signUp: async () => null,
   signIn: async () => null,
   signOut: async () => {},
 });
 
-/**
- * Read the officer's profile document, creating it on first sign-in.
- *
- * `createdAt` is a plain millisecond number rather than `serverTimestamp()`.
- * Everything else in this app stores time the same way (the UI does
- * `new Date(ts).toLocaleString("en-IN")`), and one field with different
- * semantics is exactly the kind of inconsistency that bites later.
- */
+const RELOAD_FLAG = "finguard-session-init";
+
 async function ensureUserDoc(fbUser: User, fullName?: string): Promise<AppUser> {
-  const fallbackName =
-    fullName ?? fbUser.displayName ?? fbUser.email?.split("@")[0] ?? "Investigating Officer";
-
-  if (!db) {
-    return { uid: fbUser.uid, email: fbUser.email ?? "", fullName: fallbackName, offline: false };
-  }
-
   const ref = doc(db, "users", fbUser.uid);
   const snap = await getDoc(ref);
-
   if (!snap.exists()) {
     const record = {
       email: fbUser.email ?? "",
-      fullName: fallbackName,
-      createdAt: Date.now(),
+      fullName: fullName ?? fbUser.displayName ?? fbUser.email?.split("@")[0] ?? "User",
+      createdAt: serverTimestamp(),
     };
     await setDoc(ref, record);
-    return { uid: fbUser.uid, email: record.email, fullName: record.fullName, offline: false };
+    return { uid: fbUser.uid, email: record.email, fullName: record.fullName };
   }
-
   const data = snap.data();
   return {
     uid: fbUser.uid,
-    email: (data.email as string | undefined) ?? fbUser.email ?? "",
-    fullName: (data.fullName as string | undefined) ?? fallbackName,
-    offline: false,
+    email: (data.email as string) ?? fbUser.email ?? "",
+    fullName: (data.fullName as string) ?? fbUser.displayName ?? "User",
   };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // With Firebase unconfigured there is nothing to wait for, so start already
-  // resolved and signed in as the local officer — no auth spinner on boot.
-  const [user, setUser] = useState<AppUser | null>(firebaseReady ? null : LOCAL_OFFICER);
-  const [loading, setLoading] = useState(firebaseReady);
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const a = auth;
-    if (!a) return; // offline mode — state above is already final
+    let cancelled = false;
 
-    const unsub = onAuthStateChanged(a, async (fbUser) => {
-      if (!fbUser) {
-        setUser(null);
-        setLoading(false);
-        return;
-      }
+    async function init() {
+      // Requirement #4: don't stay logged in on reload.
+      // Session persistence keeps the user only while the tab is open;
+      // a page reload clears it (unlike browserLocalPersistence).
       try {
-        setUser(await ensureUserDoc(fbUser));
+        await setPersistence(auth, browserSessionPersistence);
       } catch (err) {
-        // A profile read can fail on a project whose Firestore rules aren't
-        // published yet. Don't hold the officer out of the console for it —
-        // sign them in off the auth record and let the store surface the
-        // database error where it's actionable.
-        console.error("[Auth] profile load failed:", err);
-        setUser({
-          uid: fbUser.uid,
-          email: fbUser.email ?? "",
-          fullName: fbUser.displayName ?? fbUser.email?.split("@")[0] ?? "Investigating Officer",
-          offline: false,
-        });
-      } finally {
-        setLoading(false);
+        console.warn("[Auth] setPersistence failed:", err);
       }
-    });
 
-    return unsub;
-  }, []);
-
-  const signUp = useCallback(
-    async (email: string, password: string, fullName: string): Promise<string | null> => {
-      const a = auth;
-      if (!a) return "Firebase isn't configured, so accounts can't be created.";
-      try {
-        // createUserWithEmailAndPassword signs the new officer in, so
-        // onAuthStateChanged takes it from here — no second sign-in step.
-        const cred = await createUserWithEmailAndPassword(a, email, password);
-        if (fullName) await updateProfile(cred.user, { displayName: fullName });
-        await ensureUserDoc(cred.user, fullName);
-        return null;
-      } catch (err) {
-        return prettyAuthError(err);
+      // If this is a fresh page load (not an in-tab navigation), sign out
+      // any leftover session so the login form is required.
+      const isFreshLoad = !sessionStorage.getItem(RELOAD_FLAG);
+      if (isFreshLoad) {
+        sessionStorage.setItem(RELOAD_FLAG, "1");
+        if (auth.currentUser) {
+          try {
+            await fbSignOut(auth);
+          } catch {}
+        }
       }
-    },
-    []
-  );
 
-  const signIn = useCallback(async (email: string, password: string): Promise<string | null> => {
-    const a = auth;
-    if (!a) return "Firebase isn't configured, so sign-in is unavailable.";
-    try {
-      await signInWithEmailAndPassword(a, email, password);
-      return null;
-    } catch (err) {
-      return prettyAuthError(err);
+      const unsub = onAuthStateChanged(auth, async (fbUser) => {
+        if (cancelled) return;
+        if (!fbUser) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+        try {
+          const u = await ensureUserDoc(fbUser);
+          setUser(u);
+        } catch (err) {
+          console.error("[Auth] profile load failed:", err);
+          setUser({
+            uid: fbUser.uid,
+            email: fbUser.email ?? "",
+            fullName: fbUser.displayName ?? fbUser.email?.split("@")[0] ?? "User",
+          });
+        } finally {
+          setLoading(false);
+        }
+      });
+
+      return unsub;
     }
+
+    const p = init();
+    return () => {
+      cancelled = true;
+      p.then((unsub) => unsub && unsub());
+    };
   }, []);
 
-  const signOut = useCallback(async () => {
-    const a = auth;
-    if (!a) return; // no session to end in offline mode
-    await fbSignOut(a);
+  // Requirement #3: register once, then return to login page.
+  // We create the account, write the profile, then sign out so the
+  // user must sign in with the credentials they just created.
+  async function signUp(email: string, password: string, fullName: string) {
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(cred.user, { displayName: fullName });
+      await ensureUserDoc(cred.user, fullName);
+      await fbSignOut(auth);
+      setUser(null);
+      return null;
+    } catch (err: unknown) {
+      return prettyError(err);
+    }
+  }
+
+  async function signIn(email: string, password: string) {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      return null;
+    } catch (err: unknown) {
+      return prettyError(err);
+    }
+  }
+
+  async function signOut() {
+    await fbSignOut(auth);
     setUser(null);
-  }, []);
+  }
 
-  const value = useMemo<AuthState>(
-    () => ({ user, loading, persistent: firebaseReady, signUp, signIn, signOut }),
-    [user, loading, signUp, signIn, signOut]
+  return (
+    <AuthCtx.Provider value={{ user, loading, signUp, signIn, signOut }}>
+      {children}
+    </AuthCtx.Provider>
   );
-
-  return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }
 
-export function useAuth(): AuthState {
+export function useAuth() {
   return useContext(AuthCtx);
+}
+
+function prettyError(err: unknown): string {
+  const raw = (err as { code?: string; message?: string } | null) ?? {};
+  const code = raw.code ?? "";
+  if (code.includes("email-already-in-use")) return "This email is already registered. Try signing in.";
+  if (code.includes("invalid-email")) return "Please enter a valid email address.";
+  if (code.includes("weak-password")) return "Password must be at least 6 characters.";
+  if (code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found"))
+    return "Invalid email or password.";
+  if (code.includes("network-request-failed")) return "Network error. Check your connection.";
+  if (code.includes("configuration-not-found"))
+    return "Firebase Auth is not enabled. Go to Firebase Console → Authentication → Sign-in method → enable Email/Password.";
+  return raw.message ?? "Something went wrong. Please try again.";
 }

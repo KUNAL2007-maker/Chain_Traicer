@@ -1,0 +1,37 @@
+date,from,to,bank,amount,currency,type,note
+2026-08-01,ACC-G01,ACC-G02,HDFC Bank,45000,INR,NEFT,monthly salary credit
+2026-08-01,ACC-G03,ACC-G04,ICICI Bank,12500,INR,UPI,grocery store payment
+2026-08-02,ACC-G05,ACC-G06,State Bank of India,8900,INR,UPI,electricity bill payment
+2026-08-02,ACC-G07,ACC-G08,Axis Bank,32000,INR,UPI,online shopping order
+2026-08-03,ACC-G09,ACC-G10,Kotak Mahindra Bank,67000,INR,IMPS,freelance project invoice
+2026-08-03,ACC-G11,ACC-G12,Yes Bank,15600,INR,UPI,cafe lunch payment
+2026-08-04,ACC-G13,ACC-G14,Punjab National Bank,23400,INR,UPI,mobile recharge topup
+2026-08-04,ACC-M01,ACC-M02,HDFC Bank,250000,INR,NEFT,equipment purchase for factory
+2026-08-05,ACC-M03,ACC-M04,ICICI Bank,480000,INR,RTGS,bulk vendor settlement
+2026-08-05,ACC-M05,ACC-M06,Axis Bank,750000,INR,RTGS,commercial property advance
+2026-08-06,ACC-M07,ACC-M08,State Bank of India,620000,INR,NEFT,annual machinery maintenance
+2026-08-06,ACC-LYR-SRC,ACC-LYR-01,HDFC Bank,4800000,INR,RTGS,rapid layering transfer hop one
+2026-08-06,ACC-LYR-01,ACC-LYR-02,ICICI Bank,4720000,INR,RTGS,rapid layering transfer hop two
+2026-08-06,ACC-LYR-02,ACC-LYR-03,Axis Bank,4650000,INR,IMPS,rapid layering transfer hop three
+2026-08-06,ACC-LYR-03,ACC-LYR-04,Yes Bank,4580000,INR,RTGS,rapid layering transfer hop four
+2026-08-06,ACC-LYR-04,ACC-LYR-05,Kotak Mahindra Bank,4510000,INR,IMPS,rapid layering transfer hop five
+2026-08-06,ACC-LYR-05,ACC-LYR-OUT,State Bank of India,4450000,INR,RTGS,rapid layering cash out
+2026-08-07,ACC-MULE-01,ACC-MULE-HUB,ICICI Bank,880000,INR,IMPS,mule network deposit
+2026-08-07,ACC-MULE-02,ACC-MULE-HUB,Axis Bank,910000,INR,IMPS,mule network deposit
+2026-08-07,ACC-MULE-03,ACC-MULE-HUB,HDFC Bank,845000,INR,UPI,mule network deposit
+2026-08-07,ACC-MULE-04,ACC-MULE-HUB,Yes Bank,935000,INR,IMPS,mule network deposit
+2026-08-07,ACC-MULE-05,ACC-MULE-HUB,Punjab National Bank,865000,INR,UPI,mule network deposit
+2026-08-07,ACC-MULE-HUB,ACC-MULE-OUT,ICICI Bank,4200000,INR,RTGS,mule network consolidation payout
+2026-08-07,ACC-STR-SRC,ACC-STR-01,State Bank of India,940000,INR,UPI,structured split deposit below threshold
+2026-08-07,ACC-STR-SRC,ACC-STR-02,State Bank of India,935000,INR,UPI,structured split deposit below threshold
+2026-08-07,ACC-STR-SRC,ACC-STR-03,State Bank of India,948000,INR,UPI,structured split deposit below threshold
+2026-08-07,ACC-STR-SRC,ACC-STR-04,State Bank of India,929000,INR,UPI,structured split deposit below threshold
+2026-08-07,ACC-STR-SRC,ACC-STR-05,State Bank of India,946000,INR,UPI,structured split deposit below threshold
+2026-08-08,ACC-SHELL-01,ACC-SHELL-BEN,ICICI Bank,3600000,INR,wire_transfer,shell corporation funnel inflow
+2026-08-08,ACC-SHELL-02,ACC-SHELL-BEN,HDFC Bank,3350000,INR,wire_transfer,shell corporation funnel inflow
+2026-08-08,ACC-SHELL-03,ACC-SHELL-BEN,Axis Bank,3480000,INR,wire_transfer,shell corporation funnel inflow
+2026-08-08,ACC-SHELL-BEN,ACC-SHELL-EXIT,ICICI Bank,10000000,INR,RTGS,shell corporation funnel outflow
+2026-08-08,ACC-OFF-FD1,ACC-OFF-HUB,State Bank of India,2400000,INR,IMPS,offshore transfer staging
+2026-08-08,ACC-OFF-FD2,ACC-OFF-HUB,Kotak Mahindra Bank,2600000,INR,IMPS,offshore transfer staging
+2026-08-08,ACC-OFF-HUB,ACC-OFFSHORE-A,Kotak Mahindra Bank,2500000,INR,SWIFT,offshore transfer wired overseas
+2026-08-08,ACC-OFF-HUB,ACC-OFFSHORE-B,ICICI Bank,2450000,INR,SWIFT,offshore transfer wired overseas

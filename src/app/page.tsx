@@ -1,43 +1,30 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
-import { LoginScreen } from "@/components/LoginScreen";
+import LoginPage from "@/app/login/page";
 import { AppShell } from "@/components/AppShell";
 
-/**
- * The auth gate.
- *
- * Three states, in the order they occur:
- *   1. loading — resolving whether there is a saved session. Brief, but showing
- *      the login form here would make a signed-in officer's refresh flash a
- *      form they don't need.
- *   2. no user — the login screen.
- *   3. signed in — the console.
- *
- * With Firebase unconfigured, AuthProvider supplies a local demo officer and
- * `loading` starts false, so this falls straight through to the console and the
- * zero-config demo behaves exactly as it did before auth existed.
- */
-export default function Home() {
+export default function Page() {
   const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div
-        className="min-h-[100dvh] grid place-items-center radial-glow"
-        style={{ backgroundColor: "var(--bg)" }}
-      >
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-400" />
-          <div className="text-[12px] uppercase tracking-widest" style={{ color: "var(--muted-2)" }}>
-            Restoring session
+      <div className="min-h-screen grid place-items-center radial-glow" style={{ backgroundColor: "var(--bg)" }}>
+        <div className="text-center">
+          <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-700 grid place-items-center shadow-glow animate-pulse">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" stroke="#052e1a" strokeWidth="1.6" strokeLinejoin="round" fill="rgba(255,255,255,0.15)" />
+            </svg>
           </div>
+          <div className="text-[13px] text-slate-400">Loading FinGuard Console...</div>
         </div>
       </div>
     );
   }
 
-  if (!user) return <LoginScreen />;
+  if (!user) {
+    return <LoginPage />;
+  }
 
   return <AppShell />;
 }

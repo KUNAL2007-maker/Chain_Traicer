@@ -1,0 +1,97 @@
+date,from,to,bank,amount,currency,type,note
+2026-07-01,ACC-1001,ACC-2001,HDFC Bank,45000,INR,NEFT,salary credit
+2026-07-01,ACC-1002,ACC-2002,ICICI Bank,12500,INR,UPI,vendor payment
+2026-07-02,ACC-1003,ACC-2003,State Bank of India,78000,INR,NEFT,office rent
+2026-07-02,ACC-1004,ACC-2004,Axis Bank,5600,INR,UPI,utility bill
+2026-07-03,ACC-1005,ACC-2005,Punjab National Bank,230000,INR,RTGS,equipment purchase
+2026-07-03,ACC-1001,ACC-2006,HDFC Bank,15000,INR,IMPS,insurance premium
+2026-07-04,ACC-1006,ACC-2007,Kotak Mahindra Bank,9200,INR,UPI,subscription renewal
+2026-07-04,ACC-1007,ACC-2008,Yes Bank,67000,INR,NEFT,consulting fee
+2026-07-05,ACC-1008,ACC-2009,ICICI Bank,3400,INR,UPI,reimbursement
+2026-07-05,ACC-1002,ACC-2010,State Bank of India,88000,INR,IMPS,raw material purchase
+2026-07-06,ACC-1009,ACC-2001,Axis Bank,41000,INR,NEFT,commission payment
+2026-07-06,ACC-1010,ACC-2011,Punjab National Bank,7500,INR,UPI,travel expense
+2026-07-07,ACC-1003,ACC-2012,HDFC Bank,19500,INR,IMPS,maintenance charge
+2026-07-07,ACC-1011,ACC-2013,Kotak Mahindra Bank,120000,INR,RTGS,project milestone
+2026-07-08,ACC-1012,ACC-2014,Yes Bank,6300,INR,UPI,medical expense
+2026-07-08,ACC-1004,ACC-2015,ICICI Bank,54000,INR,NEFT,logistics payment
+2026-07-09,ACC-1013,ACC-2016,State Bank of India,28000,INR,IMPS,advertising spend
+2026-07-09,ACC-1014,ACC-2002,Axis Bank,91000,INR,RTGS,bulk order
+2026-07-10,ACC-1005,ACC-2017,Punjab National Bank,11000,INR,UPI,registration fee
+2026-07-10,ACC-1015,ACC-2018,HDFC Bank,47000,INR,NEFT,license renewal
+2026-07-11,ACC-1016,ACC-2019,Kotak Mahindra Bank,8900,INR,UPI,stationery purchase
+2026-07-11,ACC-1006,ACC-2020,Yes Bank,33000,INR,IMPS,training cost
+2026-07-12,ACC-1017,ACC-2003,ICICI Bank,72000,INR,NEFT,warehouse rental
+2026-07-12,ACC-1018,ACC-2021,State Bank of India,4100,INR,UPI,courier charges
+2026-07-13,ACC-1007,ACC-2022,Axis Bank,16000,INR,IMPS,software license
+2026-07-13,ACC-1019,ACC-2023,Punjab National Bank,59000,INR,NEFT,raw material import
+2026-07-14,ACC-1020,ACC-2024,HDFC Bank,21000,INR,UPI,audit fee
+2026-07-14,ACC-1008,ACC-2004,Kotak Mahindra Bank,95000,INR,RTGS,machinery servicing
+2026-07-15,ACC-1021,ACC-2025,Yes Bank,13500,INR,UPI,tax payment
+2026-07-15,ACC-1009,ACC-2026,ICICI Bank,62000,INR,NEFT,partnership distribution
+2026-07-16,ACC-1022,ACC-2027,State Bank of India,7800,INR,UPI,internet bill
+2026-07-16,ACC-1010,ACC-2005,Axis Bank,38000,INR,IMPS,client refund
+2026-07-17,ACC-1023,ACC-2028,Punjab National Bank,84000,INR,NEFT,annual membership
+2026-07-17,ACC-1011,ACC-2029,HDFC Bank,5200,INR,UPI,donation
+2026-07-18,ACC-1024,ACC-2030,Kotak Mahindra Bank,29000,INR,IMPS,event sponsorship
+2026-07-18,ACC-1012,ACC-2006,Yes Bank,11500,INR,UPI,security deposit
+2026-07-19,ACC-1025,ACC-2031,ICICI Bank,43000,INR,NEFT,contract payment
+2026-07-19,ACC-1013,ACC-2032,State Bank of India,6700,INR,UPI,fuel expense
+2026-07-20,ACC-1001,ACC-2033,Axis Bank,52000,INR,IMPS,bonus payout
+2026-07-20,ACC-1014,ACC-2034,Punjab National Bank,18000,INR,UPI,legal consultation
+2026-07-21,ACC-1026,ACC-2035,HDFC Bank,97000,INR,RTGS,inventory restock
+2026-07-21,ACC-1015,ACC-2007,Kotak Mahindra Bank,3600,INR,UPI,printing cost
+2026-07-22,ACC-1027,ACC-2036,Yes Bank,25000,INR,NEFT,marketing campaign
+2026-07-22,ACC-1016,ACC-2037,ICICI Bank,71000,INR,IMPS,freight charges
+2026-07-23,ACC-1028,ACC-2038,State Bank of India,14200,INR,UPI,cleaning services
+2026-07-23,ACC-1017,ACC-2008,Axis Bank,86000,INR,NEFT,wholesale purchase
+2026-07-24,ACC-1029,ACC-2039,Punjab National Bank,9900,INR,UPI,parking rental
+2026-07-24,ACC-1030,ACC-2040,HDFC Bank,36000,INR,IMPS,courier service
+2026-07-25,ACC-1031,ACC-2041,Kotak Mahindra Bank,22000,INR,NEFT,catering bill
+2026-07-25,ACC-1032,ACC-2042,Yes Bank,48000,INR,IMPS,transport charges
+2026-07-26,ACC-1033,ACC-2043,ICICI Bank,14500,INR,UPI,electricity bill
+2026-07-26,ACC-1034,ACC-2044,State Bank of India,31000,INR,NEFT,rent advance
+2026-07-27,ACC-1035,ACC-2045,Axis Bank,8400,INR,UPI,food supplies
+2026-07-27,ACC-1036,ACC-2046,Punjab National Bank,56000,INR,IMPS,contractor payment
+2026-07-28,ACC-1037,ACC-2047,HDFC Bank,17500,INR,UPI,internet service
+2026-07-28,ACC-1038,ACC-2048,Kotak Mahindra Bank,63000,INR,NEFT,annual subscription
+2026-07-29,ACC-1039,ACC-2049,Yes Bank,4800,INR,UPI,cab reimbursement
+2026-07-29,ACC-1040,ACC-2050,ICICI Bank,27000,INR,IMPS,office supplies
+2026-07-30,ACC-1041,ACC-2051,State Bank of India,39000,INR,NEFT,cloud hosting
+2026-07-30,ACC-1042,ACC-2052,Axis Bank,82000,INR,RTGS,server purchase
+2026-07-31,ACC-1043,ACC-2053,Punjab National Bank,11200,INR,UPI,phone bill
+2026-07-31,ACC-1044,ACC-2054,HDFC Bank,44000,INR,IMPS,maintenance contract
+2026-08-01,ACC-1045,ACC-2055,Kotak Mahindra Bank,19800,INR,UPI,pest control
+2026-08-01,ACC-1046,ACC-2056,Yes Bank,73000,INR,NEFT,warehouse lease
+2026-08-02,ACC-1047,ACC-2057,ICICI Bank,6100,INR,UPI,newspaper subscription
+2026-08-02,ACC-1048,ACC-2058,State Bank of India,35000,INR,IMPS,client dinner
+2026-08-03,ACC-1049,ACC-2059,Axis Bank,51000,INR,NEFT,event management
+2026-08-03,ACC-1050,ACC-2060,Punjab National Bank,8800,INR,UPI,gym membership
+2026-08-04,ACC-1051,ACC-2061,HDFC Bank,26000,INR,IMPS,uniform purchase
+2026-08-04,ACC-1052,ACC-2062,Kotak Mahindra Bank,15300,INR,UPI,water supply
+2026-08-05,ACC-1053,ACC-2063,Yes Bank,42000,INR,NEFT,painting work
+2026-08-05,ACC-1054,ACC-2064,ICICI Bank,7200,INR,UPI,tea and snacks monthly
+2026-08-06,ACC-1055,ACC-2065,State Bank of India,93000,INR,RTGS,machinery lease
+2026-08-06,ACC-1056,ACC-2066,Axis Bank,3900,INR,UPI,laundry service
+2026-08-07,ACC-1057,ACC-2067,Punjab National Bank,68000,INR,NEFT,IT support contract
+2026-08-07,ACC-1058,ACC-2068,HDFC Bank,12800,INR,UPI,fire safety inspection
+2026-08-08,ACC-1059,ACC-2069,Kotak Mahindra Bank,55000,INR,IMPS,generator maintenance
+2026-08-08,ACC-1060,ACC-2070,Yes Bank,21500,INR,NEFT,AC servicing
+2026-08-09,ACC-1061,ACC-2071,ICICI Bank,46000,INR,IMPS,carpet cleaning
+2026-08-09,ACC-1062,ACC-2072,State Bank of India,9500,INR,UPI,stationery restock
+2026-08-10,ACC-1063,ACC-2073,Axis Bank,34000,INR,NEFT,branding material
+2026-08-10,ACC-1064,ACC-2074,Punjab National Bank,61000,INR,RTGS,solar panel install
+2026-08-11,ACC-1065,ACC-2075,HDFC Bank,16700,INR,UPI,plumbing repair
+2026-08-11,ACC-1066,ACC-2076,Kotak Mahindra Bank,78000,INR,NEFT,furniture purchase
+2026-08-12,ACC-1067,ACC-2077,Yes Bank,5400,INR,UPI,taxi charges
+2026-08-12,ACC-1068,ACC-2078,ICICI Bank,87000,INR,RTGS,bulk raw material
+2026-08-13,ACC-1069,ACC-2079,State Bank of India,23000,INR,IMPS,license fee
+2026-08-13,ACC-1070,ACC-2080,Axis Bank,41000,INR,NEFT,audit quarterly
+2026-08-14,ACC-SHELL-A1,ACC-MULE-B1,HDFC Bank,5200000,INR,RTGS,rapid layering via shell entity to mule network
+2026-08-14,ACC-MULE-B1,ACC-LAYER-C1,ICICI Bank,5150000,INR,SWIFT,mule pass-through split structuring deposit
+2026-08-14,ACC-LAYER-C1,ACC-OFFSHORE-D1,State Bank of India,5100000,INR,SWIFT,offshore transfer layering to foreign shell
+2026-08-15,ACC-OFFSHORE-D1,ACC-SHELL-E1,Axis Bank,5050000,INR,RTGS,shell company rapid round-trip funds
+2026-08-15,ACC-SHELL-E1,ACC-MULE-F1,Punjab National Bank,4950000,INR,RTGS,layering mule network structured deposit
+2026-08-15,ACC-MULE-F1,ACC-OFFSHORE-G1,Kotak Mahindra Bank,4900000,INR,SWIFT,offshore pass-through to shell beneficiary
+2026-08-16,ACC-OFFSHORE-G1,ACC-SHELL-H1,Yes Bank,4850000,INR,SWIFT,rapid structuring shell company split transfer
+2026-08-16,ACC-SHELL-H1,ACC-FINAL-Z1,HDFC Bank,4800000,INR,RTGS,final layering consolidation to offshore mule

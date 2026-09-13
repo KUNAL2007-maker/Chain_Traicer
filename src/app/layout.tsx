@@ -1,27 +1,34 @@
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import type { Metadata } from "next";
-import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/components/AuthProvider";
-import { TraceStoreProvider } from "@/lib/store";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "CryptoTrace — SIH26183 · I4C Blockchain Forensics",
+  title: "FinGuard Intelligence · Cross-Bank Financial Crime Command",
   description:
-    "Real-time identification of fraud-linked cryptocurrency exchanges from victim-reported suspect wallet addresses. SIH26183 · Ministry of Home Affairs / Indian Cyber Crime Coordination Centre (I4C).",
+    "Privacy-preserving, multi-agent AI console for cross-institution financial crime detection.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // Default to dark; ThemeProvider reads the saved preference on the client and
-  // swaps the class if the user last chose light.
+// Declared explicitly so phones lay the app out at device width instead of
+// pretending to be a 980px desktop and shrinking everything. maximumScale is
+// left alone on purpose — pinch-zoom stays available, which matters for the
+// transaction table and the graph canvas. Desktop ignores all of this.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#07090d",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" className="dark">
-      <body>
+      <body className="min-h-screen" style={{ backgroundColor: "var(--bg)", color: "var(--text)" }}>
         <ThemeProvider>
-          {/* AuthProvider must wrap the store: the store scopes every read and
-              write to the signed-in officer's uid, and resets when it changes. */}
-          <AuthProvider>
-            <TraceStoreProvider>{children}</TraceStoreProvider>
-          </AuthProvider>
+          <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>
       </body>
     </html>

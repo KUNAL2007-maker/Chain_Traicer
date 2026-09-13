@@ -1,17 +1,16 @@
 "use client";
 
 import { useTheme } from "./ThemeProvider";
-import { useTraceStore } from "@/lib/store";
 import { PAGE_GUTTER } from "./ui/Page";
 import type { ViewKey } from "./AppShell";
 
 const VIEW_TITLES: Record<ViewKey, { title: string; sub: string }> = {
-  dashboard: { title: "Command Dashboard", sub: "Traced wallets, findings & the dual-track freeze decision" },
-  transfers: { title: "Transfers", sub: "Every hop on the trail · search, filter & attribute" },
-  graph: { title: "Wallet Flow Graph", sub: "Multi-chain money topology · victim entry → exchange deposit" },
-  trace: { title: "Trace a Victim-Reported Wallet", sub: "Seed the case · walk the money outward hop by hop" },
-  chat: { title: "AI Investigator · I4C", sub: "Ask in plain English · 4 specialist agents grounded in this trace" },
-  notices: { title: "Legal Notices · Sec 91 CrPC / Sec 94 BNSS", sub: "Draft & export freeze-and-KYC requisitions to exchanges" },
+  dashboard: { title: "Command Dashboard", sub: "Overview & signals" },
+  transactions: { title: "Transactions", sub: "Browse, search, and filter" },
+  graph: { title: "Interactive Transaction Graph", sub: "Multi-bank flow topology · anonymized handles" },
+  upload: { title: "Upload CSV", sub: "Import transactions from a CSV file" },
+  chat: { title: "Multi-Agent AI Investigator", sub: "Ask in natural language · 4 specialist agents online" },
+  sar: { title: "Compliance Reports · SAR Builder", sub: "Draft & export suspicious activity reports" },
 };
 
 export function TopBar({
@@ -27,19 +26,6 @@ export function TopBar({
 }) {
   const { theme, toggle } = useTheme();
   const { title, sub } = VIEW_TITLES[view];
-
-  // The toggle now controls a real poll, so it should report the real state.
-  // "ON" with nothing to poll would be a lie — there is no trace to re-walk
-  // until a case has been seeded.
-  const { refreshing, trace, status } = useTraceStore();
-  const armed = liveFeed && !!trace && status === "ready";
-  const feedLabel = !liveFeed
-    ? "Live feed · paused"
-    : refreshing
-      ? "Live feed · refreshing…"
-      : armed
-        ? "Live feed · ON"
-        : "Live feed · no trace";
 
   return (
     <header
@@ -67,7 +53,7 @@ export function TopBar({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <div className="text-[11px] uppercase tracking-widest truncate" style={{ color: "var(--muted)" }}>
-              CryptoTrace Intelligence
+              FinGuard Intelligence
             </div>
             {/* sm:, not a custom xs: — this config defines no xs breakpoint, so
                 an xs: variant would never match and the badge would vanish on
@@ -92,7 +78,7 @@ export function TopBar({
           <button
             onClick={onToggleFeed}
             aria-pressed={liveFeed}
-            title={feedLabel}
+            title={liveFeed ? "Live feed · ON" : "Live feed · paused"}
             className={`flex h-9 items-center gap-2 whitespace-nowrap rounded-lg border px-2.5 sm:px-3 transition ${
               liveFeed
                 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200 shadow-glow"
@@ -100,18 +86,8 @@ export function TopBar({
             }`}
             style={!liveFeed ? { borderColor: "var(--border)", background: "var(--chip)", color: "var(--text)" } : undefined}
           >
-            {/* Amber when the feed is on but there is nothing to poll — the same
-                blinking green as a working feed would misreport it. */}
-            <span
-              className={`h-2 w-2 rounded-full ${
-                !liveFeed
-                  ? "bg-slate-500"
-                  : armed
-                    ? "bg-emerald-400 animate-blink"
-                    : "bg-amber-400"
-              }`}
-            />
-            <span className="hidden sm:inline text-[12px]">{feedLabel}</span>
+            <span className={`h-2 w-2 rounded-full ${liveFeed ? "bg-emerald-400 animate-blink" : "bg-slate-500"}`} />
+            <span className="hidden sm:inline text-[12px]">{liveFeed ? "Live feed · ON" : "Live feed · paused"}</span>
           </button>
 
           {/* Theme toggle */}

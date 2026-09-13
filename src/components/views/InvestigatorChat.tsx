@@ -8,69 +8,32 @@ import {
   type ChatAgent,
   type ChatAgentPanel,
   type ChatMessage,
-  type ChatVerdict,
 } from "@/lib/domain";
-import { useTraceStore } from "@/lib/store";
+import { useTransactions } from "@/lib/hooks";
 import { useAuth } from "@/components/AuthProvider";
 import { Page } from "../ui/Page";
 
-// ── Chat response shapes (mirror /api/chat) ─────────────────────────────────
-// The trace summary the route attaches to an investigate reply (see summarize()
-// in src/app/api/chat/route.ts). Held in state so the session-context rail can
-// report what the last run actually found.
 type EvidenceSummary = {
   txCount: number;
-  walletCount: number;
-  vaspCount: number;
+  accountCount: number;
+  ringCount: number;
   findingCount: number;
   highCount: number;
-  track?: "A" | "B" | "DUAL";
 };
-
-type AgentResponse = {
-  agent: string;
-  headline?: string;
-  content: string;
-  findings?: string[];
-  confidence?: number;
-};
-
-type InvestigateResponse = {
-  mode: "investigate";
-  agents: AgentResponse[];
-  verdict: ChatVerdict;
-  suggestions?: string[];
-  evidence?: EvidenceSummary;
-  degraded?: string;
-  model?: string;
-  cached?: boolean;
-};
-
-type CasualResponse = {
-  mode: "casual";
-  reply: string;
-  suggestions?: string[];
-  degraded?: string;
-  model?: string;
-  retryAfter?: number;
-};
-
-// The route returns 200 for both success shapes; only the true error paths
-// (400 / 429-casual / 500) are non-ok, and those are read separately below.
-type OkResponse = InvestigateResponse | CasualResponse;
 
 // What the session-context row shows when a report came from the built-in
-// forensic engine rather than the AI. Worth naming: the panels look identical
+// analysis engine rather than the AI. Worth naming: the panels look identical
 // either way, and a reader comparing two runs deserves to know which is which.
 const LOCAL_ENGINE = "built-in engine";
 
 /**
- * A full model id is too long for a ~320px rail, so the row shows the family and
- * variant and the exact id lives in the tooltip. Before the first reply there is
- * nothing to report yet, so it shows a dash.
+ * "models/gemini-3.1-flash-live-preview" is half again too long for a 200px
+ * rail, so the row shows the family and variant and the exact id lives in the
+ * tooltip. Before the first reply there is nothing to report, so it names the
+ * model the route is pinned to.
  */
 function engineLabel(model: string | null): string {
-  if (!model) return "—";
+  if (!model) return "gemini · 3.1-flash-live";
   if (model === LOCAL_ENGINE) return LOCAL_ENGINE;
   return model
     .replace(/^models\//, "")
@@ -78,18 +41,13 @@ function engineLabel(model: string | null): string {
     .replace(/-preview$/, "");
 }
 
-export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: string[]) => void }) {
-  // The single source of truth every tab reads from. The whole TraceResult is
-  // sent to /api/chat as `context` on every turn — the route calls asTrace() on
-  // it and reads context.transfers / context.nodes, so a slimmed projection
-  // would be discarded.
-  const { trace } = useTraceStore();
-
-  // Scoped to the signed-in officer, so two officers sharing a machine never
-  // read each other's transcript. It survives a page reload or a full remount,
-  // not just a tab switch.
+export function InvestigatorChat({ onOpenGraph }: { onOpenGraph?: (accounts: string[]) => void } = {}) {
+  const { transactions } = useTransactions();
   const { user } = useAuth();
-  const storageKey = `cryptotrace-chat:${user?.uid ?? "anon"}`;
+  // The transcript is saved to localStorage so it survives a page reload or a
+  // full remount, not only a tab switch — keyed per signed-in user, so two
+  // accounts sharing one machine never inherit each other's conversation.
+  const storageKey = user?.uid ? `finguard-chat-${user.uid}` : "finguard-chat";
   const [messages, setMessages] = useState<ChatMessage[]>(freshSession);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState<ChatAgent | "assistant" | null>(null);
@@ -108,22 +66,21 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
   // The save effect waits for it, so the empty default never overwrites a stored
   // conversation during that first render.
   const [hydrated, setHydrated] = useState(false);
-  // Which storageKey the state currently in `messages` was loaded from.
-  const hydratedKey = useRef<string | null>(null);
 
-  // A static "wait 24 seconds" goes stale the moment it is read. Ticking it down
-  // turns the same number into something the officer can act on — and it stops
-  // on its own, so nothing needs clearing elsewhere.
+  // A static "wait 24 seconds" goes stale the moment it is read, and the reader
+  // has no way to tell whether it is still true. Ticking it down turns the same
+  // number into something they can act on — and it stops on its own, so nothing
+  // needs clearing elsewhere.
   useEffect(() => {
     if (cooldown <= 0) return;
     const t = setTimeout(() => setCooldown((s) => s - 1), 1000);
     return () => clearTimeout(t);
   }, [cooldown]);
 
-  // Read the saved transcript back on mount, and only replace the default when a
+  // Read the saved transcript back. Runs on mount and again if the key changes
+  // (the uid resolves a beat after auth), and only replaces the default when a
   // non-empty conversation was actually stored.
   useEffect(() => {
-    let restored = false;
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
@@ -136,33 +93,19 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
           setMessages(saved.messages);
           if (saved.evidence) setEvidence(saved.evidence);
           if (typeof saved.engine === "string") setEngine(saved.engine);
-          restored = true;
         }
       }
     } catch {
       // A corrupt or unreadable cache should never take the console down with
       // it — fall back to the fresh session already in state.
     }
-    if (!restored) {
-      // Nothing stored for this officer. Clear rather than leave whatever the
-      // previous session had on screen, which is what a sign-out/sign-in would
-      // otherwise show.
-      setMessages(freshSession());
-      setEvidence(null);
-      setEngine(null);
-    }
-    // A ref, not the `hydrated` flag alone: the save effect below runs in the
-    // same commit as this one, and a state update wouldn't be visible to it yet.
-    // Without this, switching officers writes the previous transcript straight
-    // into the new officer's key before the load result lands.
-    hydratedKey.current = storageKey;
     setHydrated(true);
   }, [storageKey]);
 
   // Write it back on every change, once hydration has run so we don't clobber a
   // stored conversation with the empty default on first paint.
   useEffect(() => {
-    if (!hydrated || hydratedKey.current !== storageKey) return;
+    if (!hydrated) return;
     try {
       localStorage.setItem(storageKey, JSON.stringify({ messages, evidence, engine }));
     } catch {
@@ -170,20 +113,17 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
     }
   }, [hydrated, messages, evidence, engine, storageKey]);
 
-  // The wallet addresses this trace actually contains — from the transfers and
-  // the resolved nodes. A "View on graph" button opens focused on whichever of
-  // these an agent named. Longest first, so a full address wins over a prefix.
-  const walletAddresses = useMemo(() => {
+  // Match against the real account list rather than a name pattern, so this
+  // works whatever the user's CSV calls its accounts.
+  const accountNames = useMemo(() => {
     const s = new Set<string>();
-    for (const t of trace?.transfers ?? []) {
-      if (t.from_address) s.add(t.from_address);
-      if (t.to_address) s.add(t.to_address);
+    for (const t of transactions) {
+      if (t.fromAccount) s.add(t.fromAccount);
+      if (t.toAccount) s.add(t.toAccount);
     }
-    for (const n of trace?.nodes ?? []) {
-      if (n.address) s.add(n.address);
-    }
+    // Longest first, so "ACC-MULE-HUB-2" wins over "ACC-MULE-HUB".
     return Array.from(s).sort((a, b) => b.length - a.length);
-  }, [trace]);
+  }, [transactions]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -200,21 +140,32 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
     setThinking("assistant");
 
     try {
+      // Send the real field names — the server analyses these rows into an
+      // evidence brief before the AI ever sees them.
+      const context = transactions.slice(0, 120).map((t) => ({
+        id: t.id, date: t.date, fromAccount: t.fromAccount, toAccount: t.toAccount,
+        bank: t.bank, amount: t.amount, currency: t.currency, type: t.type,
+        severity: t.severity, note: t.note,
+      }));
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
           mode: forcedMode,
-          // Send the whole TraceResult — the route analyses these transfers into
-          // an evidence brief before the AI sees them, and it checks
-          // context.transfers / context.nodes are arrays. A null trace is fine:
-          // the route degrades to a "no trace loaded" verdict.
-          context: trace,
+          context,
+          // Rate limits are counted per account rather than per IP address. A
+          // computer lab or a phone on shared Wi-Fi presents one address for
+          // everybody, so limiting by it would make classmates throttle each
+          // other for requests they never made.
+          uid: user?.uid,
           // Gemini accepts two roles, "user" and "model". A finished report is
-          // stored locally as role "report"; passing that through verbatim gets
-          // the turn rejected, so every follow-up is normalised to user/assistant
-          // here. The route sanitises again on arrival.
+          // stored locally as role "report", and passing that through verbatim
+          // gets the whole turn rejected — which is why every follow-up asked
+          // after an investigation once came back as "AI service unavailable".
+          // The API sanitises this again on arrival; sending clean roles just
+          // means it never has to.
           history: messages
             .filter((m) => m.role !== "system")
             .slice(-8)
@@ -226,10 +177,7 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
       });
 
       if (!res.ok) {
-        const errData = (await res.json().catch(() => ({}))) as {
-          error?: string;
-          retryAfter?: number;
-        };
+        const errData = await res.json().catch(() => ({}));
         // 429 is the rate limiter, and it sends the exact number of seconds left.
         // Starting the countdown here is what makes the message stay true while
         // it is on screen.
@@ -239,8 +187,9 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
         throw new Error(errData.error || `API returned ${res.status}`);
       }
 
-      const data = (await res.json()) as OkResponse;
+      const data = await res.json();
       if (data.degraded) setNotice(data.degraded);
+      if (data.evidence) setEvidence(data.evidence);
       setEngine(data.model ?? LOCAL_ENGINE);
 
       if (data.mode === "casual") {
@@ -258,23 +207,16 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
         return;
       }
 
-      // Investigate reply. Fold the trace summary into the rail and assemble the
-      // four specialist panels in a fixed order so the breakdown always reads the
-      // same way, whichever order the model returned them.
-      if (data.evidence) setEvidence(data.evidence);
-
-      const agentOrder: ChatAgent[] = [
-        "Chain Analyst",
-        "Attribution Analyst",
-        "Compliance Officer",
-        "Investigating Officer",
-      ];
+      // One report bubble, not four. The verdict is the answer; the specialists'
+      // full write-ups fold away behind a toggle so the reply stays short
+      // without throwing any of the analysis away.
+      const agentOrder: ChatAgent[] = ["Graph Analyst", "Risk Analyst", "Compliance Officer", "Investigation Assistant"];
       const agents = data.agents ?? [];
       const panels: ChatAgentPanel[] = [];
       for (let i = 0; i < agentOrder.length; i++) {
         const agent = agentOrder[i];
         const resp =
-          agents.find((a) => a.agent?.toLowerCase() === agent.toLowerCase()) ?? agents[i];
+          agents.find((a: { agent: string }) => a.agent?.toLowerCase() === agent.toLowerCase()) ?? agents[i];
         if (!resp?.content) continue;
         panels.push({
           agent,
@@ -306,7 +248,7 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
         },
       ]);
     } catch (err) {
-      setAiError(err instanceof Error ? err.message : "Failed to reach the investigator");
+      setAiError(err instanceof Error ? err.message : "Failed to reach AI service");
     } finally {
       setThinking(null);
     }
@@ -314,9 +256,15 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
 
   return (
     <Page fill>
-      {/* Explicit column tracks: a fixed rail and a fluid transcript. Below lg
-          the grid takes its content height and the page scrolls; at lg and up the
-          transcript scrolls inside a window-height column. */}
+      {/* Explicit column tracks instead of a 12-col span pair. The old
+          `xl:col-span-3 / 9` collapsed the rail to full width below 1280px and,
+          above it, handed the transcript 75% of an ultrawide monitor. */}
+      {/* min-h-0 + flex-1 are gated to lg. They exist so the transcript can
+          scroll inside a window-height column, but in the single-column mobile
+          stack they pinned the grid to the viewport and let the chat row shrink
+          to zero — the panel was there with height 0. Below lg the grid takes
+          its content height and the page scrolls; at lg and up the computed
+          values are min-height:0 / flex:1 1 0% exactly as before. */}
       <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)]">
         {/* Left rail */}
         <aside className="space-y-4 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
@@ -344,8 +292,8 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
               })}
             </div>
             <button
-              onClick={() => send("Run a full forensic investigation of this wallet trace.", "investigate")}
-              disabled={!!thinking}
+              onClick={() => send("Run a full investigation on my current transactions.", "investigate")}
+              disabled={!!thinking || transactions.length === 0}
               className="mt-3 w-full rounded-lg border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 px-3 py-2 text-[12.5px] font-medium shadow-glow transition disabled:opacity-50"
             >
               ⚡ Run full investigation
@@ -374,13 +322,13 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
           <div className="rounded-2xl p-4 border" style={{ background: "var(--panel)", borderColor: "var(--border)" }}>
             <div className="text-[11px] uppercase tracking-widest" style={{ color: "var(--muted)" }}>Session context</div>
             <div className="mt-2 space-y-1.5 text-[12px]">
-              <ContextRow k="Transfers" v={String(trace?.transfers.length ?? 0)} />
+              <ContextRow k="Transactions" v={String(transactions.length)} />
               {evidence ? (
                 <>
-                  <ContextRow k="Wallets traced" v={String(evidence.walletCount)} />
-                  <ContextRow k="Exchanges reached" v={String(evidence.vaspCount)} />
+                  <ContextRow k="Accounts traced" v={String(evidence.accountCount)} />
+                  <ContextRow k="Rings found" v={String(evidence.ringCount)} />
                   <ContextRow k="Hard findings" v={String(evidence.findingCount)} />
-                  <ContextRow k="High-risk wallets" v={String(evidence.highCount)} />
+                  <ContextRow k="High-risk rows" v={String(evidence.highCount)} />
                 </>
               ) : (
                 <ContextRow k="Analysis" v="not run yet" />
@@ -391,10 +339,15 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
         </aside>
 
         {/* Chat surface */}
-        {/* order-first below lg: in a single column the rail's cards are tall, so
-            the conversation would start below a screen of scrolling. lg:order-none
-            restores source order. */}
+        {/* order-first below lg: in a single column the rail's three cards are
+            ~900px tall, so the conversation — the thing you came for — would
+            start below two screens of scrolling. lg:order-none restores source
+            order, and both items sit at order 0 exactly as before. */}
         <section className="order-first flex min-w-0 flex-col lg:order-none lg:min-h-0">
+          {/* Was a hardcoded 640px tall box. On a 1440×900 monitor that left a
+              dead band under the composer, and on a short laptop it overflowed.
+              Now the panel takes the height the window gives it and the message
+              list is the part that scrolls. */}
           <div className="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-2xl border" style={{ background: "var(--panel)", borderColor: "var(--border)" }}>
             <div className="shrink-0 px-4 py-3 border-b flex flex-wrap items-center justify-between gap-3" style={{ borderColor: "var(--border)" }}>
               <div className="flex min-w-0 items-center gap-3">
@@ -411,7 +364,7 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
                     const blob = new Blob([txt], { type: "text/plain" });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a");
-                    a.href = url; a.download = "cryptotrace-transcript.txt"; a.click();
+                    a.href = url; a.download = "transcript.txt"; a.click();
                     URL.revokeObjectURL(url);
                   }}
                   className="text-[11px] rounded-md border px-2 py-1 hover:bg-[var(--hover)]"
@@ -438,7 +391,7 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
                 <Message
                   key={m.id}
                   m={m}
-                  wallets={walletAddresses}
+                  accountNames={accountNames}
                   onOpenGraph={onOpenGraph}
                   onAsk={(q) => send(q)}
                   busy={!!thinking}
@@ -470,7 +423,8 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
                 <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[13px] text-red-300">
                   {/* While a cooldown is running the ticking figure is the more
                       useful of the two, so it replaces the seconds baked into the
-                      server's sentence. */}
+                      server's sentence rather than sitting beside it and
+                      disagreeing with it a second later. */}
                   {cooldown > 0
                     ? aiError.replace(/\d+ seconds?/, `${cooldown} second${cooldown === 1 ? "" : "s"}`)
                     : aiError}
@@ -490,7 +444,11 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
                       send(input);
                     }
                   }}
-                  placeholder='Ask "Why is this wallet high risk?" or "Which exchange do we freeze first?"'
+                  placeholder='Ask "Why is Shell Alpha suspicious?" or "Show transfers > ₹10 lakh today"'
+                  // min-w-0: an input's automatic minimum size comes from its
+                  // intrinsic ~177px, so on a 320px phone the row could not
+                  // shrink and pushed the send button off the card. No effect on
+                  // desktop, where the row has 600px to spend.
                   className="min-w-0 flex-1 bg-transparent outline-none text-[13.5px]"
                   style={{ color: "var(--text)" }}
                   disabled={!!thinking}
@@ -506,18 +464,10 @@ export function InvestigatorChat({ onOpenGraph }: { onOpenGraph: (accounts: stri
                   Ask fleet
                 </button>
               </div>
-              {trace ? (
-                <div className="mt-2 flex items-center gap-2 text-[11px]" style={{ color: "var(--muted)" }}>
-                  <span className="w-1.5 h-1.5 shrink-0 rounded-full bg-emerald-400 animate-blink" />
-                  Answers are grounded in the {trace.transfers.length} on-chain transfers in this trace — no generic advice.
-                </div>
-              ) : (
-                <div className="mt-2 flex items-center gap-2 text-[11px]" style={{ color: "var(--muted)" }}>
-                  <span className="w-1.5 h-1.5 shrink-0 rounded-full bg-amber-400 animate-blink" />
-                  No case loaded yet — trace a victim-reported wallet in{" "}
-                  <span style={{ color: "var(--text)" }}>Trace Wallet</span> to ground answers, or ask anyway for general guidance.
-                </div>
-              )}
+              <div className="mt-2 flex items-center gap-2 text-[11px]" style={{ color: "var(--muted)" }}>
+                <span className="w-1.5 h-1.5 shrink-0 rounded-full bg-emerald-400 animate-blink" />
+                Answers are grounded in the {transactions.length} transactions you uploaded — no generic advice.
+              </div>
             </div>
           </div>
         </section>
@@ -544,15 +494,15 @@ function freshSession(): ChatMessage[] {
 }
 
 // What an earlier bubble contributes to the next turn. A report's own `content`
-// is only its headline, so the verdict points and named wallets travel with it —
-// otherwise a follow-up like "which exchange should we serve first?" is answered
+// is only its headline, so the verdict points and named accounts travel with it —
+// otherwise a follow-up like "which accounts should I freeze first?" is answered
 // by a model that cannot see what the investigation just found.
 function historyText(m: ChatMessage): string {
   const base = m.content ?? "";
   if (m.role !== "report" || !m.verdict) return base;
   const points = (m.verdict.points ?? []).slice(0, 4).map((p) => `• ${p}`).join("\n");
   const accounts = (m.verdict.accounts ?? []).slice(0, 10).join(", ");
-  return [base, points, accounts && `Wallets implicated: ${accounts}`]
+  return [base, points, accounts && `Accounts implicated: ${accounts}`]
     .filter(Boolean)
     .join("\n");
 }
@@ -574,16 +524,16 @@ function ContextRow({ k, v, mono, title }: { k: string; v: string; mono?: boolea
 
 function Message({
   m,
-  wallets,
+  accountNames,
   onOpenGraph,
   onAsk,
   busy,
 }: {
   m: ChatMessage;
-  wallets: string[];
-  onOpenGraph: (accounts: string[]) => void;
-  onAsk: (q: string) => void;
-  busy: boolean;
+  accountNames?: string[];
+  onOpenGraph?: (accounts: string[]) => void;
+  onAsk?: (q: string) => void;
+  busy?: boolean;
 }) {
   if (m.role === "system") {
     return (
@@ -615,8 +565,7 @@ function Message({
     return <ReportMessage m={m} onOpenGraph={onOpenGraph} onAsk={onAsk} busy={busy} />;
   }
   if (m.role === "assistant") {
-    // Wallets this reply actually named — the graph opens focused on those.
-    const named = wallets.filter((a) => m.content.includes(a)).slice(0, 12);
+    const named = (accountNames ?? []).filter((a) => m.content.includes(a)).slice(0, 12);
     return (
       <div className="flex items-start gap-3">
         <div
@@ -639,21 +588,23 @@ function Message({
           >
             {m.content}
           </div>
-          {(named.length > 0 || !!m.suggestions?.length) && (
+          {(onOpenGraph || !!m.suggestions?.length) && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {named.length > 0 && (
+              {onOpenGraph && (
                 <button
                   onClick={() => onOpenGraph(named)}
                   className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11.5px] text-emerald-300 transition hover:bg-emerald-500/20"
                 >
                   ◈ View on graph
-                  <span style={{ color: "var(--muted-2)" }}>· {named.length}</span>
+                  {named.length > 0 && (
+                    <span style={{ color: "var(--muted-2)" }}>· {named.length}</span>
+                  )}
                 </button>
               )}
               {m.suggestions?.map((q) => (
                 <button
                   key={q}
-                  onClick={() => onAsk(q)}
+                  onClick={() => onAsk?.(q)}
                   disabled={busy}
                   className="rounded-md border px-2.5 py-1 text-[11.5px] transition hover:bg-[var(--hover)] disabled:opacity-40"
                   style={{ borderColor: "var(--border)", background: "var(--chip)", color: "var(--muted)" }}
@@ -667,10 +618,9 @@ function Message({
       </div>
     );
   }
-  // role === "agent" — a single specialist bubble (kept for any transcript that
-  // stored one; reports fold their panels inside ReportMessage instead).
   const meta = AGENT_META[m.agent!];
-  const mentioned = wallets
+  // Accounts this agent actually named — the graph opens focused on those.
+  const mentioned = (accountNames ?? [])
     .filter((a) => `${m.headline ?? ""} ${m.content} ${(m.findings ?? []).join(" ")}`.includes(a))
     .slice(0, 12);
   return (
@@ -730,7 +680,7 @@ function Message({
               ))}
             </div>
           )}
-          {mentioned.length > 0 && (
+          {onOpenGraph && (
             <div className="mt-3 pt-2.5 border-t" style={{ borderColor: "var(--border)" }}>
               <button
                 onClick={() => onOpenGraph(mentioned)}
@@ -738,9 +688,11 @@ function Message({
                 style={{ borderColor: `${meta.color}55`, background: meta.bg, color: meta.color }}
               >
                 ◈ View on graph
-                <span style={{ color: "var(--muted-2)" }}>
-                  · {mentioned.length} {mentioned.length === 1 ? "wallet" : "wallets"}
-                </span>
+                {mentioned.length > 0 && (
+                  <span style={{ color: "var(--muted-2)" }}>
+                    · {mentioned.length} {mentioned.length === 1 ? "account" : "accounts"}
+                  </span>
+                )}
               </button>
             </div>
           )}
@@ -750,9 +702,9 @@ function Message({
   );
 }
 
-// The investigation reply. Deliberately one short card: a verdict, the few facts
-// behind it, and a toggle. The four specialists' full write-ups are still here —
-// they are just not the first thing you have to read.
+// The investigation reply. Deliberately one short card: a verdict, the few
+// facts behind it, and a toggle. The four specialists' full write-ups are still
+// here — they are just not the first thing you have to read.
 const LEVEL_TEXT = { high: "High risk", medium: "Needs a look", safe: "Clear" } as const;
 
 function ReportMessage({
@@ -762,16 +714,15 @@ function ReportMessage({
   busy,
 }: {
   m: ChatMessage;
-  onOpenGraph: (accounts: string[]) => void;
-  onAsk: (q: string) => void;
-  busy: boolean;
+  onOpenGraph?: (accounts: string[]) => void;
+  onAsk?: (q: string) => void;
+  busy?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const v: ChatVerdict | undefined = m.verdict;
+  const v = m.verdict;
   const level = v?.level ?? "high";
   const tone = severityColor(level);
   const panels = m.panels ?? [];
-  const accounts = v?.accounts ?? [];
 
   return (
     <div className="flex items-start gap-3">
@@ -812,29 +763,29 @@ function ReportMessage({
               ))}
             </ul>
           )}
-          {(accounts.length > 0 || panels.length > 0) && (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t pt-2.5" style={{ borderColor: "var(--border)" }}>
-              {accounts.length > 0 && (
-                <button
-                  onClick={() => onOpenGraph(accounts)}
-                  className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11.5px] transition hover:opacity-80"
-                  style={{ borderColor: `${tone}55`, background: `${tone}14`, color: tone }}
-                >
-                  ◈ View these wallets on the graph
-                  <span style={{ color: "var(--muted-2)" }}>· {accounts.length}</span>
-                </button>
-              )}
-              {panels.length > 0 && (
-                <button
-                  onClick={() => setOpen((o) => !o)}
-                  className="rounded-md border px-2.5 py-1 text-[11.5px] transition hover:bg-[var(--hover)]"
-                  style={{ borderColor: "var(--border)", background: "var(--chip)", color: "var(--text)" }}
-                >
-                  {open ? "▴ Hide the full breakdown" : `▾ Full breakdown (${panels.length} agents)`}
-                </button>
-              )}
-            </div>
-          )}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t pt-2.5" style={{ borderColor: "var(--border)" }}>
+            {onOpenGraph && (
+              <button
+                onClick={() => onOpenGraph(v?.accounts ?? [])}
+                className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11.5px] transition hover:opacity-80"
+                style={{ borderColor: `${tone}55`, background: `${tone}14`, color: tone }}
+              >
+                ◈ View on graph
+                {!!v?.accounts.length && (
+                  <span style={{ color: "var(--muted-2)" }}>· {v.accounts.length} accounts</span>
+                )}
+              </button>
+            )}
+            {panels.length > 0 && (
+              <button
+                onClick={() => setOpen((o) => !o)}
+                className="rounded-md border px-2.5 py-1 text-[11.5px] transition hover:bg-[var(--hover)]"
+                style={{ borderColor: "var(--border)", background: "var(--chip)", color: "var(--text)" }}
+              >
+                {open ? "▴ Hide the full breakdown" : `▾ Full breakdown (${panels.length} agents)`}
+              </button>
+            )}
+          </div>
         </div>
 
         {open && (
@@ -850,7 +801,7 @@ function ReportMessage({
             {m.suggestions.map((q) => (
               <button
                 key={q}
-                onClick={() => onAsk(q)}
+                onClick={() => onAsk?.(q)}
                 disabled={busy}
                 className="rounded-md border px-2.5 py-1 text-[11.5px] transition hover:bg-[var(--hover)] disabled:opacity-40"
                 style={{ borderColor: "var(--border)", background: "var(--chip)", color: "var(--muted)" }}
