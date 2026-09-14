@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{# Port of src/components/views/TransactionsView.tsx. The search box + severity
+   segmented control filtered a useState-derived list in the SPA; here every row
+   is rendered server-side with data-search / data-sev attributes and app.js hides
+   the non-matching ones (no reload), keeping the "{n} of {total}" counter and the
+   "No transactions match your filters" message in sync. Delete is a PRG POST to
+   /transactions/delete. Context: txs (from the /transactions route). #}
+{% from "_macros.html" import severity_badge %}
+
+{% block content %}
+{# Page width="wide" — src/components/ui/Page.tsx #}
+<div class="min-h-full">
+  <div class="mx-auto w-full max-w-[1760px] px-4 sm:px-5 2xl:px-8 py-4 sm:py-5">
+    <div class="rounded-2xl border overflow-hidden" style="background: var(--panel); border-color: var(--border)"
+         data-tx-root data-tx-total="{{ txs|length }}">
+      <div class="p-4 flex flex-wrap items-center gap-3 border-b" style="border-color: var(--border)">
+        <input type="text" data-tx-search placeholder="Search by account, bank, note, amount..."
+          class="h-9 flex-1 min-w-[240px] rounded-lg border px-3 text-[13px] outline-none focus:border-emerald-500/40"
+          style="background: var(--chip); border-color: var(--border); color: var(--text)" />
+        <div class="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg border p-1"
+             style="border-color: var(--border); background: var(--chip)">
+          {% for s in ["all", "high", "medium", "safe"] %}
+          <button type="button" data-tx-sev="{{ s }}" aria-pressed="{{ 'true' if s == 'all' else 'false' }}"
+            class="rounded-md px-3 py-1 text-[12px] capitalize transition"
+            {% if s == 'all' %}style="background: var(--panel); color: var(--text-strong); box-shadow: 0 1px 0 rgba(0,0,0,.25)"{% else %}style="color: var(--muted-2)"{% endif %}>
+            {{ s }}
+          </button>
+          {% endfor %}
+        </div>
+        <div class="ml-auto shrink-0 text-[12px] tabular-nums" style="color: var(--muted-2)">
+          <span data-tx-count>{{ txs|length }}</span> of {{ txs|length }}
+        </div>
+      </div>
+
+      {% if txs|length == 0 %}
+      <div class="p-10 text-center">
+        <div class="text-4xl mb-2">📁</div>
+        <div class="text-[14px] font-medium" style="color: var(--text-strong)">No transactions yet</div>
+        <div class="text-[12px] mt-1" style="color: var(--muted-2)">Import a CSV to get started</div>
+      </div>
+      {% else %}
+
+      {# Phone / tablet: card per row (hidden lg+). #}
+      <div class="divide-y lg:hidden" style="border-color: var(--border)" data-tx-mobile>
+        {% for t in txs %}
+        {% set p = detectPattern(t.note) %}
+        {% set amt_str = (t.amount | int | string) if t.amount == (t.amount | int) else (t.amount | string) %}
+        <div class="p-3.5" style="border-color: var(--border)" data-tx-row data-tx-sev-val="{{ t.severity }}"
+             data-tx-search="{{ (t.fromAccount ~ ' ' ~ t.toAccount ~ ' ' ~ (t.bank or '') ~ ' ' ~ (t.note or '') ~ ' ' ~ (p.label if p else '') ~ ' ' ~ amt_str) | lower }}">
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-mono text-[11.5px] tabular-nums" style="color: var(--muted)">{{ t.date }}</span>
+            {{ severity_badge(t.severity) }}
+          </div>
+          <div class="mt-1.5 font-mono text-[16px] font-semibold tabular-nums" style="color: var(--text-strong)">{{ tx_amount(t) }}</div>
+          <div class="mt-1.5 flex items-baseline gap-1.5 text-[12.5px]" style="color: var(--text)">
+            <span class="break-all">{{ t.fromAccount }}</span>
+            <span style="color: var(--muted)">→</span>
+            <span class="break-all">{{ t.toAccount }}</span>
+          </div>
+          <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+            <span class="text-[11.5px]" style="color: var(--muted-2)">{{ t.bank }} · {{ t.type }}</span>
+            {% if p %}<span class="rounded px-1.5 py-0.5 text-[10.5px] font-medium" style="background: {{ p.color }}22; color: {{ p.color }}">{{ p.label }}</span>{% endif %}
+            <form method="post" action="/transactions/delete" class="ml-auto" data-confirm="Delete this transaction?">
+              <input type="hidden" name="id" value="{{ t.id }}" />
+              <button type="submit" class="rounded-md border px-2 py-1 text-[11px] text-red-400/80 transition active:bg-red-500/10" style="border-color: var(--border)">Delete</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+        <div class="hidden p-6 text-center text-[13px]" style="color: var(--muted)" data-tx-empty>No transactions match your filters</div>
+      </div>
+
+      {# Desktop: bounded scroll table with pinned header (hidden below lg). #}
+      <div class="hidden overflow-auto max-h-[calc(100vh-260px)] lg:block" data-tx-desktop>
+        <table class="w-full text-[13px]">
+          <thead class="sticky top-0 z-10">
+            <tr class="text-[11px] uppercase tracking-widest text-left backdrop-blur" style="background: var(--panel-strong); color: var(--muted)">
+              <th class="px-4 py-2.5 font-medium whitespace-nowrap">Date</th>
+              <th class="px-4 py-2.5 font-medium">From</th>
+              <th class="px-4 py-2.5 font-medium">To</th>
+              <th class="px-4 py-2.5 font-medium">Bank</th>
+              <th class="px-4 py-2.5 font-medium text-right whitespace-nowrap">Amount</th>
+              <th class="px-4 py-2.5 font-medium">Type</th>
+              <th class="px-4 py-2.5 font-medium">Risk</th>
+              <th class="px-4 py-2.5 font-medium">Pattern</th>
+              <th class="px-4 py-2.5 font-medium text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in txs %}
+            {% set p = detectPattern(t.note) %}
+            {% set amt_str = (t.amount | int | string) if t.amount == (t.amount | int) else (t.amount | string) %}
+            <tr class="border-t hover:bg-[var(--hover)] transition" style="border-color: var(--border); color: var(--text)"
+                data-tx-row data-tx-sev-val="{{ t.severity }}"
+                data-tx-search="{{ (t.fromAccount ~ ' ' ~ t.toAccount ~ ' ' ~ (t.bank or '') ~ ' ' ~ (t.note or '') ~ ' ' ~ (p.label if p else '') ~ ' ' ~ amt_str) | lower }}">
+              <td class="px-4 py-2.5 font-mono text-[12px] whitespace-nowrap tabular-nums">{{ t.date }}</td>
+              <td class="px-4 py-2.5">{{ t.fromAccount }}</td>
+              <td class="px-4 py-2.5">{{ t.toAccount }}</td>
+              <td class="px-4 py-2.5">{{ t.bank }}</td>
+              <td class="px-4 py-2.5 text-right font-mono whitespace-nowrap tabular-nums">{{ tx_amount(t) }}</td>
+              <td class="px-4 py-2.5 text-[12px] whitespace-nowrap" style="color: var(--muted)">{{ t.type }}</td>
+              <td class="px-4 py-2.5">{{ severity_badge(t.severity) }}</td>
+              <td class="px-4 py-2.5">
+                {% if p %}<span class="inline-block rounded px-1.5 py-0.5 text-[10.5px] font-medium whitespace-nowrap" style="background: {{ p.color }}22; color: {{ p.color }}">{{ p.label }}</span>{% else %}<span class="text-[12px]" style="color: var(--muted)">—</span>{% endif %}
+              </td>
+              <td class="px-4 py-2.5 text-right">
+                <form method="post" action="/transactions/delete" data-confirm="Delete this transaction?">
+                  <input type="hidden" name="id" value="{{ t.id }}" />
+                  <button type="submit" class="rounded-md border border-transparent px-2 py-1 text-[11px] text-red-400/70 transition hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300">Delete</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="hidden p-6 text-center text-[13px]" style="color: var(--muted)" data-tx-empty>No transactions match your filters</div>
+      </div>
+
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+{# Port of src/app/login/page.tsx. Standalone (no shell). Two modes share one
+   form: the server renders the initial mode (and re-renders it with an error on a
+   failed POST); the bottom toggle flips modes instantly in-page via the inline
+   script, swapping the form action between /login and /signup. Requirement #3 —
+   after a successful signup the server redirects here in login mode with an info
+   banner, so sign-in is always explicit. #}
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#07090d" />
+  <title>Sign in · FinGuard Intelligence</title>
+  <script>
+    (function () {
+      try {
+        var t = sessionStorage.getItem('finguard-theme');
+        document.documentElement.classList.add(t === 'light' ? 'light' : 'dark');
+      } catch (e) { document.documentElement.classList.add('dark'); }
+    })();
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: {
+        boxShadow: { glow: '0 0 24px rgba(34,197,94,0.25)' },
+        fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] }
+      } }
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/app.css" />
+</head>
+<body style="background: var(--bg); color: var(--text)">
+  <div class="min-h-screen flex items-center justify-center px-4" style="background: var(--bg)">
+    <div class="w-full max-w-md">
+      <div class="flex items-center justify-center gap-3 mb-8">
+        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-700 grid place-items-center shadow-glow">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" stroke="#052e1a" stroke-width="1.6" stroke-linejoin="round" fill="rgba(255,255,255,0.15)" />
+            <path d="M9 12l2 2 4-4" stroke="#052e1a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+        <div>
+          <div class="text-xl font-semibold" style="color: var(--text-strong)">
+            FinGuard <span class="text-emerald-400">Intelligence</span>
+          </div>
+          <div class="text-[11px] uppercase tracking-widest" style="color: var(--muted-2)">
+            Transaction analysis console
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-2xl p-6 border" style="background: var(--panel); border-color: var(--border)"
+        data-auth data-mode="{{ mode }}">
+        <div class="text-center mb-6">
+          <h1 data-title class="text-lg font-semibold" style="color: var(--text-strong)">
+            {{ "Welcome back" if mode == "login" else "Create your account" }}
+          </h1>
+          <p data-subtitle class="text-[13px] mt-1" style="color: var(--muted-2)">
+            {{ "Sign in with your email and password" if mode == "login" else "Sign up to start analyzing transactions" }}
+          </p>
+        </div>
+
+        {% if info %}
+        <div class="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[13px] text-emerald-300">
+          {{ info }}
+        </div>
+        {% endif %}
+        {% if error %}
+        <div class="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[13px] text-red-300">
+          {{ error }}
+        </div>
+        {% endif %}
+
+        <form data-form method="post" action="{{ '/login' if mode == 'login' else '/signup' }}" class="space-y-4">
+          <div data-fullname-field {% if mode != 'signup' %}class="hidden"{% endif %}>
+            <label class="block text-[12px] uppercase tracking-widest mb-1.5" style="color: var(--muted-2)">Full name</label>
+            <input type="text" name="fullName" value="{{ fullName or '' }}" placeholder="Your name"
+              {% if mode == 'signup' %}required{% endif %}
+              class="w-full rounded-lg border px-3 py-2.5 text-[14px] outline-none focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 transition"
+              style="background: var(--chip); border-color: var(--border); color: var(--text)" />
+          </div>
+          <div>
+            <label class="block text-[12px] uppercase tracking-widest mb-1.5" style="color: var(--muted-2)">Email</label>
+            <input type="email" name="email" value="{{ email or '' }}" placeholder="you@example.com" required
+              class="w-full rounded-lg border px-3 py-2.5 text-[14px] outline-none focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 transition"
+              style="background: var(--chip); border-color: var(--border); color: var(--text)" />
+          </div>
+          <div>
+            <label class="block text-[12px] uppercase tracking-widest mb-1.5" style="color: var(--muted-2)">Password</label>
+            <input type="password" name="password" placeholder="At least 6 characters" required minlength="6"
+              class="w-full rounded-lg border px-3 py-2.5 text-[14px] outline-none focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 transition"
+              style="background: var(--chip); border-color: var(--border); color: var(--text)" />
+          </div>
+
+          <button type="submit" data-submit
+            class="w-full rounded-xl border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 py-2.5 text-[14px] font-medium shadow-glow transition disabled:opacity-50">
+            {{ "Sign in" if mode == "login" else "Create account" }}
+          </button>
+        </form>
+
+        <div class="my-5 h-px" style="background: var(--border)"></div>
+
+        <p class="text-center text-[13px]" style="color: var(--muted-2)">
+          <span data-switch-copy>{{ "New to FinGuard?" if mode == "login" else "Already have an account?" }}</span>
+          <button type="button" data-switch class="text-emerald-300 hover:underline">
+            {{ "Create an account" if mode == "login" else "Sign in" }}
+          </button>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var root = document.querySelector('[data-auth]');
+      if (!root) return;
+      var form = root.querySelector('[data-form]');
+      var title = root.querySelector('[data-title]');
+      var subtitle = root.querySelector('[data-subtitle]');
+      var submit = root.querySelector('[data-submit]');
+      var field = root.querySelector('[data-fullname-field]');
+      var fullInput = field.querySelector('input');
+      var copy = root.querySelector('[data-switch-copy]');
+      var toggle = root.querySelector('[data-switch]');
+
+      function apply(mode) {
+        root.setAttribute('data-mode', mode);
+        var login = mode === 'login';
+        form.setAttribute('action', login ? '/login' : '/signup');
+        title.textContent = login ? 'Welcome back' : 'Create your account';
+        subtitle.textContent = login
+          ? 'Sign in with your email and password'
+          : 'Sign up to start analyzing transactions';
+        submit.textContent = login ? 'Sign in' : 'Create account';
+        copy.textContent = login ? 'New to FinGuard?' : 'Already have an account?';
+        toggle.textContent = login ? 'Create an account' : 'Sign in';
+        if (login) {
+          field.classList.add('hidden');
+          fullInput.removeAttribute('required');
+        } else {
+          field.classList.remove('hidden');
+          fullInput.setAttribute('required', 'required');
+        }
+      }
+
+      toggle.addEventListener('click', function () {
+        apply(root.getAttribute('data-mode') === 'login' ? 'signup' : 'login');
+      });
+    })();
+  </script>
+</body>
+</html>

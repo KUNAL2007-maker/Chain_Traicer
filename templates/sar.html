@@ -1,0 +1,483 @@
+{% extends "base.html" %}
+{# Port of src/components/views/SARReports.tsx.
+
+   The report body is derived on the server (main.py's /sar route builds the
+   `narrative` from the currently-scoped transactions), never stored — so a case
+   opened today is written against today's data, which is what "real-time
+   generation" has to mean for a live case file. The section-number logic mirrors
+   the source: "Accounts of interest" only appears when there are subjects, and
+   every later heading shifts down by one when it is absent — a single running
+   counter (namespace) reproduces that exactly.
+
+   The printed filing is rendered into {% block body_extra %}, which base.html
+   emits as a direct child of <body>; app.css's `body > *:not(#sar-print-portal)`
+   rule then hides the whole app chrome at print time and sends the printer this
+   document and nothing else. "Export PDF ↓" is wired to window.print() by the
+   SAR module in app.js via the data-sar-print hook. #}
+{% from "_macros.html" import severity_badge %}
+
+{% block content %}
+<div class="min-h-full">
+  <div class="mx-auto w-full max-w-[1760px] {{ PAGE_GUTTER }} py-4 sm:py-5">
+
+    {# Fixed-width case list, flexible document. #}
+    <div class="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)] 2xl:grid-cols-[380px_minmax(0,1fr)]">
+
+      {# ── Case list ── #}
+      <aside class="min-w-0 space-y-4">
+        <div class="rounded-2xl border" style="background: var(--panel); border-color: var(--border)">
+          <div class="p-4 border-b" style="border-color: var(--border)">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <div class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Reports</div>
+                <div class="mt-0.5 text-[15px] font-semibold" style="color: var(--text-strong)">{{ reports | length }} total</div>
+              </div>
+              {# "+ New" always files a whole-file report (no account); the /sar/create
+                 route dedupes on a source fingerprint and re-opens a twin instead of
+                 cloning it, so a second click on unchanged data is a no-op with a notice. #}
+              <form method="post" action="/sar/create" class="contents">
+                <button type="submit" {% if txs | length == 0 %}disabled{% endif %}
+                  class="text-[11px] rounded-md border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 px-2.5 py-1.5 disabled:opacity-50">+ New</button>
+              </form>
+            </div>
+
+            {% if reports | length > 0 %}
+            <div class="mt-3">
+              <form method="post" action="/sar/clear" class="contents"
+                data-confirm="Delete all {{ reports | length }} report{{ '' if reports | length == 1 else 's' }}? This cannot be undone.">
+                <button type="submit"
+                  class="text-[11.5px] underline decoration-dotted hover:text-red-200"
+                  style="color: var(--muted)">Clear history</button>
+              </form>
+            </div>
+            {% endif %}
+
+            {% if notice %}
+            <div class="mt-3 rounded-md border border-sky-500/25 bg-sky-500/10 px-2.5 py-2 text-[11.5px] text-sky-200" role="status">
+              {{ notice }}
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="max-h-[560px] overflow-auto divide-y" style="border-color: var(--border)">
+            {% for c in reports %}
+            {% set active = (selected and c.id == selected.id) %}
+            <div class="group relative">
+              <a href="/sar?selected={{ c.id }}"
+                class="block w-full text-left p-3 pr-9 hover:bg-[var(--hover)] transition border-l-2 {{ 'bg-emerald-500/[0.06] border-emerald-500' if active else 'border-transparent' }}">
+                <div class="flex items-center gap-2">
+                  {{ severity_badge(c.severity) }}
+                  <span class="text-[10.5px] font-mono" style="color: var(--muted-2)">{{ c.id[:8] }}</span>
+                  {% if c.account %}
+                  <span class="text-[10px] rounded px-1.5 py-0.5 border border-white/10" style="color: var(--muted)">one account</span>
+                  {% endif %}
+                </div>
+                <div class="mt-1 text-[13px] line-clamp-2" style="color: var(--text-strong)">{{ c.title }}</div>
+                <div class="mt-1 flex items-center gap-2 text-[11px]" style="color: var(--muted)">
+                  <span class="font-mono">{{ formatINR(c.amount) }}</span>
+                  <span>·</span>
+                  <span>{{ c.status }}</span>
+                </div>
+              </a>
+              <form method="post" action="/sar/delete" class="contents">
+                <input type="hidden" name="id" value="{{ c.id }}" />
+                <button type="submit" aria-label="Delete this report" title="Delete this report"
+                  class="absolute top-2.5 right-2 rounded px-1.5 py-0.5 text-[13px] leading-none opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-red-500/20 hover:text-red-200 transition"
+                  style="color: var(--muted-2)">×</button>
+              </form>
+            </div>
+            {% endfor %}
+            {% if reports | length == 0 %}
+            <div class="p-6 text-center text-[13px]" style="color: var(--muted)">
+              No reports yet. Upload transactions first.
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if txs | length > 0 %}
+        <div class="rounded-2xl border p-4 text-[12px] leading-relaxed"
+          style="background: var(--panel); border-color: var(--border); color: var(--muted)">
+          <div class="text-[11px] uppercase tracking-widest mb-1.5" style="color: var(--muted-2)">Live source</div>
+          Every report on this page is written from your current
+          <span style="color: var(--text)">{{ txs | length }}</span> transactions. Upload more and the
+          wording, accounts and statutes update on their own.
+        </div>
+        {% endif %}
+      </aside>
+
+      {# ── Document ── #}
+      <section class="min-w-0">
+        {% if not selected %}
+        <div class="flex h-full min-h-[420px] flex-col items-center justify-center rounded-2xl border p-10 text-center"
+          style="background: var(--panel); border-color: var(--border)">
+          <div class="text-4xl mb-2">📄</div>
+          <div class="text-[15px] font-semibold" style="color: var(--text-strong)">No report selected</div>
+          <div class="mt-1 text-[13px]" style="color: var(--muted-2)">Click "+ New" to generate a report from your transactions</div>
+        </div>
+        {% else %}
+        {% set ns = namespace(n=0) %}
+        <div class="rounded-2xl border" style="background: var(--panel); border-color: var(--border)">
+          <div class="px-5 py-4 border-b flex items-start gap-4" style="border-color: var(--border)">
+            <div class="grid place-items-center w-11 h-11 rounded-lg bg-red-500/15 text-red-300">📄</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">SAR · {{ selected.status }} · {{ ref_no }}</span>
+                {{ severity_badge(selected.severity, 'md') }}
+              </div>
+              <div class="mt-1 text-[17px] font-semibold" style="color: var(--text-strong)">{{ selected.title }}</div>
+              <div class="text-[12px]" style="color: var(--muted)">
+                {{ narrative.flaggedCount }} flagged transfers · {{ formatINR(narrative.flaggedValue) }} · {{ narrative.period }}
+              </div>
+              {% if selected.account and ring and ring | length > 0 %}
+              <div class="mt-0.5 text-[11.5px]" style="color: var(--muted-2)">
+                Raised from <span class="font-mono">{{ selected.account }}</span> · scoped to that ring
+                ({{ scoped_accounts }} accounts, {{ scoped_count }} transfers)
+              </div>
+              {% endif %}
+            </div>
+            <button type="button" data-sar-print
+              class="text-[12px] rounded-md border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 px-3 py-1.5 shrink-0">Export PDF ↓</button>
+          </div>
+
+          <div class="p-5 space-y-5">
+            {# 1 · Summary #}
+            {% set ns.n = ns.n + 1 %}
+            <section>
+              <div class="text-[11px] uppercase tracking-widest text-emerald-300 mb-1.5">{{ ns.n }} · Summary of suspicion</div>
+              <div class="text-[13px] leading-relaxed" style="color: var(--text)">
+                {% for p in narrative.summary %}
+                <p{% if not loop.first %} class="mt-2"{% endif %}>{{ p }}</p>
+                {% endfor %}
+              </div>
+            </section>
+
+            {# 2 · Accounts of interest (only when subjects exist) #}
+            {% if narrative.subjects | length > 0 %}
+            {% set ns.n = ns.n + 1 %}
+            <section>
+              <div class="text-[11px] uppercase tracking-widest text-emerald-300 mb-1.5">{{ ns.n }} · Accounts of interest</div>
+              <div class="text-[13px] leading-relaxed" style="color: var(--text)">
+                <div class="overflow-hidden rounded-lg border" style="border-color: var(--border)">
+                  <table class="w-full text-[12.5px]">
+                    <thead class="text-left" style="background: var(--chip); color: var(--muted)">
+                      <tr>
+                        <th class="px-3 py-2 font-medium">Account</th>
+                        <th class="px-3 py-2 font-medium">Role</th>
+                        <th class="px-3 py-2 font-medium text-right">Received</th>
+                        <th class="px-3 py-2 font-medium text-right">Sent</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for s in narrative.subjects %}
+                      <tr class="border-t align-top" style="border-color: var(--border); color: var(--text)">
+                        <td class="px-3 py-2 font-mono whitespace-nowrap">{{ s.account }}</td>
+                        <td class="px-3 py-2">
+                          <div style="color: var(--text-strong)">{{ s.role }}</div>
+                          <div class="text-[11.5px] mt-0.5" style="color: var(--muted)">{{ s.why }}</div>
+                        </td>
+                        <td class="px-3 py-2 font-mono text-right whitespace-nowrap">{{ (formatINR(s.inAmount) ~ " (" ~ s.inCount ~ ")") if s.inCount else "—" }}</td>
+                        <td class="px-3 py-2 font-mono text-right whitespace-nowrap">{{ (formatINR(s.outAmount) ~ " (" ~ s.outCount ~ ")") if s.outCount else "—" }}</td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+            {% endif %}
+
+            {# Grounds for suspicion #}
+            {% set ns.n = ns.n + 1 %}
+            <section>
+              <div class="text-[11px] uppercase tracking-widest text-emerald-300 mb-1.5">{{ ns.n }} · Grounds for suspicion</div>
+              <div class="text-[13px] leading-relaxed" style="color: var(--text)">
+                {% if narrative.grounds | length == 0 %}
+                <p style="color: var(--muted)">No structural indicator was found in this data. Nothing here is reportable.</p>
+                {% endif %}
+                <div class="space-y-3">
+                  {% for g in narrative.grounds %}
+                  <div class="rounded-lg border p-3" style="border-color: var(--border); background: var(--chip)">
+                    <div class="flex items-start gap-2 flex-wrap">
+                      {{ severity_badge('safe' if g.severity == 'info' else g.severity) }}
+                      <span class="text-[13px] font-semibold flex-1 min-w-0" style="color: var(--text-strong)">{{ g.title }}</span>
+                    </div>
+                    <p class="mt-1.5">{{ g.text }}</p>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+            </section>
+
+            {# Regulatory basis #}
+            {% set ns.n = ns.n + 1 %}
+            <section>
+              <div class="text-[11px] uppercase tracking-widest text-emerald-300 mb-1.5">{{ ns.n }} · Regulatory basis</div>
+              <div class="text-[13px] leading-relaxed" style="color: var(--text)">
+                <div class="space-y-2.5">
+                  {% for r in narrative.regulations %}
+                  <div>
+                    <div class="font-semibold" style="color: var(--text-strong)">{{ r.statute }}</div>
+                    <div>{{ r.requirement }}</div>
+                    <div class="text-[12px] mt-0.5" style="color: var(--muted)">Why it applies here: {{ r.because }}</div>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+            </section>
+
+            {# Recommended action #}
+            {% set ns.n = ns.n + 1 %}
+            <section>
+              <div class="text-[11px] uppercase tracking-widest text-emerald-300 mb-1.5">{{ ns.n }} · Recommended action</div>
+              <div class="text-[13px] leading-relaxed" style="color: var(--text)">
+                <ol class="list-decimal pl-5 space-y-1">
+                  {% for a in narrative.actions %}
+                  <li>{{ a }}</li>
+                  {% endfor %}
+                </ol>
+              </div>
+            </section>
+
+            {# Transactions reported (first 20 on screen; the full list prints) #}
+            {% set ns.n = ns.n + 1 %}
+            <section>
+              <div class="text-[11px] uppercase tracking-widest text-emerald-300 mb-1.5">{{ ns.n }} · Transactions reported</div>
+              <div class="text-[13px] leading-relaxed" style="color: var(--text)">
+                <div class="overflow-hidden rounded-lg border" style="border-color: var(--border)">
+                  <table class="w-full text-[12.5px]">
+                    <thead class="text-left" style="background: var(--chip); color: var(--muted)">
+                      <tr>
+                        <th class="px-3 py-2 font-medium">Date</th>
+                        <th class="px-3 py-2 font-medium">From</th>
+                        <th class="px-3 py-2 font-medium">To</th>
+                        <th class="px-3 py-2 font-medium">Bank</th>
+                        <th class="px-3 py-2 font-medium text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for t in high_risk[:20] %}
+                      <tr class="border-t" style="border-color: var(--border); color: var(--text)">
+                        <td class="px-3 py-2 font-mono">{{ t.date }}</td>
+                        <td class="px-3 py-2">{{ t.fromAccount }}</td>
+                        <td class="px-3 py-2">{{ t.toAccount }}</td>
+                        <td class="px-3 py-2">{{ t.bank }}</td>
+                        <td class="px-3 py-2 font-mono text-right">{{ tx_amount(t) }}</td>
+                      </tr>
+                      {% endfor %}
+                      {% if high_risk | length == 0 %}
+                      <tr><td colspan="5" class="px-3 py-4 text-center" style="color: var(--muted)">No high-risk transactions in your data</td></tr>
+                      {% endif %}
+                    </tbody>
+                  </table>
+                </div>
+                {% if high_risk | length > 20 %}
+                <div class="mt-1.5 text-[11.5px]" style="color: var(--muted)">
+                  Showing the first 20 of {{ high_risk | length }} flagged transfers. The full list prints with the PDF.
+                </div>
+                {% endif %}
+              </div>
+            </section>
+
+            {# Conclusion #}
+            {% set ns.n = ns.n + 1 %}
+            <section>
+              <div class="text-[11px] uppercase tracking-widest text-emerald-300 mb-1.5">{{ ns.n }} · Conclusion</div>
+              <div class="text-[13px] leading-relaxed" style="color: var(--text)">
+                <p>{{ narrative.conclusion }}</p>
+              </div>
+            </section>
+
+            <div class="flex items-center justify-between pt-4 border-t" style="border-color: var(--border)">
+              <div class="text-[11px]" style="color: var(--muted-2)">
+                Status: <span class="font-semibold" style="color: var(--text)">{{ selected.status }}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <form method="post" action="/sar/status" class="contents">
+                  <input type="hidden" name="id" value="{{ selected.id }}" />
+                  <input type="hidden" name="status" value="Draft" />
+                  <button type="submit" class="text-[12px] rounded-md border px-3 py-1.5"
+                    style="border-color: var(--border); background: var(--chip); color: var(--text)">Draft</button>
+                </form>
+                <form method="post" action="/sar/status" class="contents">
+                  <input type="hidden" name="id" value="{{ selected.id }}" />
+                  <input type="hidden" name="status" value="Under review" />
+                  <button type="submit" class="text-[12px] rounded-md border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 px-3 py-1.5">Under review</button>
+                </form>
+                <form method="post" action="/sar/status" class="contents">
+                  <input type="hidden" name="id" value="{{ selected.id }}" />
+                  <input type="hidden" name="status" value="Filed" />
+                  <button type="submit" class="text-[12px] rounded-md border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 px-3 py-1.5">Mark as filed</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      </section>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block body_extra %}
+{# The printed filing — a direct child of <body>. On screen #sar-print-portal is
+   display:none (app.css); the print stylesheet reverses that and hides every
+   other top-level node, so the printer receives this document and nothing else:
+   no sidebar, no buttons, no dark background. Laid out as a filing, not a web
+   page — plain type, ruled headings, and the FULL transaction list. #}
+{% if selected %}
+{% set pns = namespace(n=0) %}
+<div id="sar-print-portal">
+  <article>
+    <header style="border-bottom: 1.5pt solid #000; padding-bottom: 6pt; margin-bottom: 10pt">
+      <div style="font-size: 8pt; letter-spacing: 0.14em; text-transform: uppercase">FinGuard Intelligence · Confidential</div>
+      <h1 style="margin: 3pt 0 2pt; font-weight: 700">Suspicious Activity Report</h1>
+      <div style="font-size: 9pt">Filed under section 12, Prevention of Money Laundering Act, 2002</div>
+      <table style="margin-top: 7pt; font-size: 8.5pt; border: none">
+        <tbody>
+          <tr>
+            <td style="border: none; padding: 1pt 12pt 1pt 0; width: 25%"><strong>Reference</strong> {{ ref_no }}</td>
+            <td style="border: none; padding: 1pt 12pt 1pt 0; width: 25%"><strong>Status</strong> {{ selected.status }}</td>
+            <td style="border: none; padding: 1pt 12pt 1pt 0; width: 50%"><strong>Period reviewed</strong> {{ narrative.period }}</td>
+          </tr>
+          <tr>
+            <td style="border: none; padding: 1pt 12pt 1pt 0"><strong>Transfers reported</strong> {{ narrative.flaggedCount }}</td>
+            <td style="border: none; padding: 1pt 12pt 1pt 0" colspan="2"><strong>Value reported</strong> {{ formatINR(narrative.flaggedValue) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </header>
+
+    {% set pns.n = pns.n + 1 %}
+    <section>
+      <h2>{{ pns.n }}. Summary of suspicion</h2>
+      {% for p in narrative.summary %}<p>{{ p }}</p>{% endfor %}
+    </section>
+
+    {% if narrative.subjects | length > 0 %}
+    {% set pns.n = pns.n + 1 %}
+    <section>
+      <h2>{{ pns.n }}. Accounts of interest</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 18%">Account</th>
+            <th style="width: 40%">Role and reason</th>
+            <th style="width: 13%">Received</th>
+            <th style="width: 13%">Sent</th>
+            <th style="width: 16%">Banks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in narrative.subjects %}
+          <tr>
+            <td>{{ s.account }}</td>
+            <td><strong>{{ s.role }}.</strong> {{ s.why }}</td>
+            <td class="num">{{ (formatINR(s.inAmount) ~ " (" ~ s.inCount ~ ")") if s.inCount else "—" }}</td>
+            <td class="num">{{ (formatINR(s.outAmount) ~ " (" ~ s.outCount ~ ")") if s.outCount else "—" }}</td>
+            <td>{{ s.banks | join(", ") or "—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+
+    {% set pns.n = pns.n + 1 %}
+    <section>
+      <h2>{{ pns.n }}. Grounds for suspicion</h2>
+      {% if narrative.grounds | length == 0 %}
+      <p>No structural indicator of money laundering was identified in the data reviewed.</p>
+      {% endif %}
+      {% for g in narrative.grounds %}
+      <div style="margin-bottom: 6pt">
+        <p style="margin: 0 0 1.5pt; text-align: left">
+          <strong>{{ loop.index }}. {{ g.title }}</strong>
+          <span style="font-size: 8pt; text-transform: uppercase; letter-spacing: 0.06em">[{{ g.severity }}]</span>
+        </p>
+        <p style="margin: 0">{{ g.text }}</p>
+      </div>
+      {% endfor %}
+    </section>
+
+    {% set pns.n = pns.n + 1 %}
+    <section>
+      <h2>{{ pns.n }}. Regulatory basis</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 27%">Provision</th>
+            <th style="width: 36%">What it requires</th>
+            <th style="width: 37%">Why it applies here</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in narrative.regulations %}
+          <tr>
+            <td>{{ r.statute }}</td>
+            <td>{{ r.requirement }}</td>
+            <td>{{ r.because }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    {% set pns.n = pns.n + 1 %}
+    <section>
+      <h2>{{ pns.n }}. Recommended action</h2>
+      <ol style="margin: 0; padding-left: 14pt">
+        {% for a in narrative.actions %}<li style="margin-bottom: 2.5pt">{{ a }}</li>{% endfor %}
+      </ol>
+    </section>
+
+    {% set pns.n = pns.n + 1 %}
+    <section class="sar-flow">
+      <h2>{{ pns.n }}. Transactions reported ({{ high_risk | length }})</h2>
+      {% if high_risk | length == 0 %}
+      <p>No transaction in the reviewed data was graded high risk.</p>
+      {% else %}
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 12%">Date</th>
+            <th style="width: 22%">From</th>
+            <th style="width: 22%">To</th>
+            <th style="width: 16%">Bank</th>
+            <th style="width: 10%">Type</th>
+            <th style="width: 18%">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in high_risk %}
+          <tr>
+            <td>{{ t.date }}</td>
+            <td>{{ t.fromAccount }}</td>
+            <td>{{ t.toAccount }}</td>
+            <td>{{ t.bank }}</td>
+            <td>{{ t.type }}</td>
+            <td class="num">{{ tx_amount(t) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </section>
+
+    {% set pns.n = pns.n + 1 %}
+    <section>
+      <h2>{{ pns.n }}. Conclusion</h2>
+      <p>{{ narrative.conclusion }}</p>
+    </section>
+
+    <footer style="margin-top: 12pt; border-top: 0.5pt solid #999; padding-top: 5pt; font-size: 7.5pt">
+      Generated by FinGuard Intelligence from the transaction data held at the time of export.
+      This document contains information restricted under section 12 of the PMLA, 2002 and must
+      not be disclosed to the subjects named in it.
+    </footer>
+  </article>
+</div>
+{% endif %}
+{% endblock %}

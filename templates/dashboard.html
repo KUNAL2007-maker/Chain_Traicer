@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{# Port of src/components/views/CommandDashboard.tsx. Context comes from the "/"
+   route in app/main.py: stats, alerts, alert_groups (webutil.group_alerts_by_date),
+   heatmap (webutil.build_heatmap), typology (webutil.build_typology), and the four
+   sparkline dicts spark1..spark4. The alert-row expand (useState in the SPA) becomes
+   a [data-alert-toggle] click handled in app.js — single-open, like the original. #}
+{% from "_macros.html" import metric_card, panel_header, severity_badge %}
+
+{# SignalMini — the little score bar in the expanded alert. src/.../CommandDashboard SignalMini. #}
+{% macro signal_mini(label, value, color) -%}
+<div class="rounded-lg border border-white/5 bg-white/[0.02] p-2">
+  <div class="text-[10px]" style="color: var(--muted)">{{ label }}</div>
+  <div class="mt-1 text-[16px] font-bold" style="color: {{ color }}">{{ value }}%</div>
+  <div class="mt-1 h-1 rounded-full bg-white/5 overflow-hidden">
+    <div class="h-full" style="width: {{ value }}%; background: linear-gradient(90deg, {{ color }}, {{ color }}55)"></div>
+  </div>
+</div>
+{%- endmacro %}
+
+{% block content %}
+{# Page (width="default") — src/components/ui/Page.tsx #}
+<div class="min-h-full">
+  <div class="mx-auto w-full max-w-[1440px] px-4 sm:px-5 2xl:px-8 py-4 sm:py-5">
+
+    {# ── KPI Row ── #}
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      {{ metric_card(
+          "Total Transactions", format_en_in(stats.total), sub="Across all accounts",
+          accent="#38bdf8", spark=spark1,
+          icon='<span class="text-[11px]">◇</span>'|safe,
+          trend={"dir": "up", "text": "Live from database"}) }}
+      {{ metric_card(
+          "Flagged Amount", formatINR(stats.flaggedAmount), sub="High-risk total",
+          accent="#22c55e", spark=spark2,
+          icon='<span class="text-[11px]">₹</span>'|safe,
+          trend={"dir": "up", "text": stats.high ~ " high-risk txns"}) }}
+      {{ metric_card(
+          "High-Risk Transfers", stats.high, sub="Flagged for review",
+          accent="#ef4444", spark=spark3,
+          icon='<span class="text-[11px]">◉</span>'|safe,
+          trend={"dir": "up" if stats.high > 0 else "flat",
+                 "text": (stats.high ~ " need review") if stats.high > 0 else "All clear"}) }}
+      {{ metric_card(
+          "Open Alerts", stats.openAlerts, sub="Active alerts",
+          accent="#a78bfa", spark=spark4,
+          icon='<span class="text-[11px]">◈</span>'|safe,
+          trend={"dir": "up" if stats.openAlerts > 0 else "flat",
+                 "text": (stats.openAlerts ~ " need attention") if stats.openAlerts > 0 else "All clear"}) }}
+    </div>
+
+    {# ── Middle strip — heatmap + agent fleet ── #}
+    <div class="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="rounded-2xl p-4 border" style="background: var(--panel); border-color: var(--border)">
+        {% call panel_header("Risk Heatmap", "Severity × Date") %}
+          <div class="flex items-center gap-1.5 text-[11px]" style="color: var(--muted)">
+            <span class="w-2 h-2 rounded-sm bg-emerald-500/60"></span><span>low</span>
+            <span class="w-2 h-2 rounded-sm bg-amber-500/70"></span><span>med</span>
+            <span class="w-2 h-2 rounded-sm bg-red-500/80"></span><span>high</span>
+          </div>
+        {% endcall %}
+        {% if heatmap.columns|length == 0 %}
+        <div class="mt-8 mb-6 text-center text-[12.5px]" style="color: var(--muted-2)">
+          Upload a CSV to populate the heatmap.
+        </div>
+        {% else %}
+        <div class="mt-4 space-y-[3px]">
+          {% for r in heatmap.rows %}
+          <div class="grid gap-[3px] items-center" style="grid-template-columns: 18px repeat({{ heatmap.columns|length }}, minmax(0,1fr))">
+            <div class="text-[9px] font-mono" style="color: {{ r.color }}">{{ r.short }}</div>
+            {% for c in heatmap.columns %}
+            {% set count = c[r.key] %}
+            <div title="{{ c.label }} · {{ r.label }}: {{ count }} txn{{ 's' if count != 1 else '' }}"
+                 class="h-4 rounded-[3px]"
+                 style="background: {{ r.color }}; opacity: {{ 0.06 if count == 0 else 0.2 + (count / r.max) * 0.8 }}"></div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+        <div class="mt-2 ml-[21px] flex justify-between text-[9px] font-mono" style="color: var(--muted)">
+          <span>{{ heatmap.columns[0].label }}</span>
+          {% if heatmap.columns|length > 2 %}<span>{{ heatmap.columns[heatmap.columns|length // 2].label }}</span>{% endif %}
+          <span>{{ heatmap.columns[heatmap.columns|length - 1].label }}</span>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="rounded-2xl p-4 border" style="background: var(--panel); border-color: var(--border)">
+        {% call panel_header("Multi-Agent Fleet", "4 agents · online") %}
+          <span class="text-[11px] rounded px-1.5 py-0.5 bg-sky-500/10 text-sky-300 border border-sky-500/25">LLM · v4.2</span>
+        {% endcall %}
+        <div class="mt-3 grid grid-cols-2 gap-2.5">
+          {% for a in FLEET %}
+          <div class="rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full" style="background: {{ a.color }}; box-shadow: 0 0 8px {{ a.color }}"></span>
+              <div class="text-[12px] truncate" style="color: var(--text)">{{ a.name }}</div>
+            </div>
+            <div class="mt-1.5 h-1 rounded-full bg-white/5 overflow-hidden">
+              <div class="h-full" style="width: {{ a.load }}%; background: linear-gradient(90deg, {{ a.color }}, {{ a.color }}55)"></div>
+            </div>
+            <div class="mt-1 flex justify-between text-[10px]" style="color: var(--muted)">
+              <span>load</span><span class="font-mono">{{ a.load }}%</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {# ── Alert Feed + Typology ── #}
+    <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px]">
+      <div class="min-w-0 flex flex-col rounded-2xl border overflow-hidden" style="background: var(--panel); border-color: var(--border)">
+        <div class="shrink-0 p-4 flex items-start justify-between gap-3 border-b" style="border-color: var(--border)">
+          <div class="min-w-0">
+            <div class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Real-Time Alert Feed</div>
+            <div class="mt-0.5 text-[15px] font-semibold" style="color: var(--text-strong)">Transaction alerts</div>
+          </div>
+          <div class="flex shrink-0 items-center gap-2 text-[11px]" style="color: var(--muted)">
+            <span data-live-dot class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-blink"></span>
+            <span data-live-word>streaming</span>
+            {% if alerts|length > 0 %}<span>· {{ alerts|length }} alert{{ 's' if alerts|length != 1 else '' }}</span>{% endif %}
+          </div>
+        </div>
+
+        {% if alerts|length == 0 %}
+        <div class="p-10 text-center">
+          <div class="text-[32px] mb-3 opacity-30">◇</div>
+          <div class="text-[14px] font-medium" style="color: var(--text-strong)">No alerts yet</div>
+          <div class="mt-1 text-[12.5px] mx-auto max-w-sm" style="color: var(--muted-2)">Upload a CSV file to start monitoring transactions. High-risk transactions will trigger alerts here.</div>
+        </div>
+        {% else %}
+        <div class="divide-y max-h-[520px] overflow-y-auto" style="border-color: var(--border)">
+          {% for group in alert_groups %}
+          <div>
+            <div class="sticky top-0 z-10 px-4 py-2 text-[11px] uppercase tracking-widest font-semibold backdrop-blur" style="color: var(--muted); background: var(--panel-strong)">
+              {{ group.date }}
+            </div>
+            {% for row in group.alerts %}
+            {% set a = row.a %}
+            <div data-alert-id="{{ a.id }}">
+              <div data-alert-toggle class="p-4 flex items-start gap-3 hover:bg-[var(--hover)] transition cursor-pointer group">
+                <div class="mt-1 w-2 h-2 rounded-full flex-shrink-0 {{ 'bg-red-500' if a.severity == 'high' else 'bg-amber-400' if a.severity == 'medium' else 'bg-emerald-400' }}"></div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <div class="text-[14px] font-medium" style="color: var(--text-strong)">{{ a.title }}</div>
+                    {{ severity_badge(a.severity) }}
+                    <span class="text-[11px]" style="color: var(--muted)">{{ row.time }}</span>
+                  </div>
+                  <div class="mt-1 text-[12.5px]" style="color: var(--muted-2)">{{ a.detail }}</div>
+                  <div class="mt-2 flex items-center gap-2 flex-wrap">
+                    <span class="text-[11px] font-mono" style="color: var(--muted)">{{ formatINR(a.amount) }}</span>
+                  </div>
+                </div>
+                <button data-alert-toggle-btn
+                  class="opacity-0 group-hover:opacity-100 transition text-[11px] rounded-md border px-2 py-1 hover:bg-[var(--hover)] flex-shrink-0"
+                  style="border-color: var(--border); color: var(--text)">
+                  Investigate →
+                </button>
+              </div>
+              <div data-alert-detail class="hidden px-4 pb-4 ml-9">
+                <div class="rounded-xl border p-4 space-y-3" style="background: var(--bg); border-color: var(--border)">
+                  <div class="text-[11px] uppercase tracking-widest text-sky-300">Investigation Details</div>
+                  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                      <div class="text-[10px] uppercase tracking-widest" style="color: var(--muted)">Alert Title</div>
+                      <div class="mt-0.5 text-[13px]" style="color: var(--text)">{{ a.title }}</div>
+                    </div>
+                    <div>
+                      <div class="text-[10px] uppercase tracking-widest" style="color: var(--muted)">Amount</div>
+                      <div class="mt-0.5 text-[13px] font-mono" style="color: var(--text)">{{ formatINR(a.amount) }}</div>
+                    </div>
+                    <div>
+                      <div class="text-[10px] uppercase tracking-widest" style="color: var(--muted)">Severity</div>
+                      <div class="mt-1">{{ severity_badge(a.severity) }}</div>
+                    </div>
+                    <div>
+                      <div class="text-[10px] uppercase tracking-widest" style="color: var(--muted)">Timestamp</div>
+                      <div class="mt-0.5 text-[13px] font-mono" style="color: var(--text)">{{ row.stamp }}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-[10px] uppercase tracking-widest" style="color: var(--muted)">Details</div>
+                    <div class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--text)">{{ a.detail }}</div>
+                  </div>
+                  <div class="text-[10px] uppercase tracking-widest" style="color: var(--muted)">Risk Assessment</div>
+                  {% set sig = SIGNAL_SCORES[a.severity] %}
+                  <div class="grid grid-cols-3 gap-2">
+                    {{ signal_mini("Severity score", sig.severity, severityColor(a.severity)) }}
+                    {{ signal_mini("Confidence", sig.confidence, "#38bdf8") }}
+                    {{ signal_mini("Priority", sig.priority, "#a78bfa") }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="flex flex-col rounded-2xl p-4 border" style="background: var(--panel); border-color: var(--border)">
+        {{ panel_header("Typology Distribution", "Detected patterns") }}
+        {% if typology.total == 0 %}
+        <div class="mt-8 mb-6 text-center text-[12.5px]" style="color: var(--muted-2)">
+          No suspicious typologies detected yet.
+        </div>
+        {% else %}
+        <div class="mt-4 space-y-3">
+          {% for r in typology.rows %}
+          <div>
+            <div class="flex items-center justify-between gap-3 text-[12px]">
+              <div class="flex min-w-0 items-center gap-2">
+                <span class="w-1.5 h-1.5 shrink-0 rounded-full" style="background: {{ r.color }}"></span>
+                <span class="truncate" style="color: var(--text)">{{ r.name }}</span>
+              </div>
+              <span class="shrink-0 font-mono tabular-nums" style="color: var(--muted)">{{ r.count }} · {{ r.pct }}%</span>
+            </div>
+            <div class="mt-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+              <div class="h-full" style="width: {{ r.pct }}%; background: linear-gradient(90deg, {{ r.color }}, {{ r.color }}44)"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <div class="mt-auto pt-4">
+          <div class="h-px mb-4" style="background: var(--border)"></div>
+          <div class="rounded-lg border border-sky-500/20 bg-sky-500/[0.05] p-3">
+            <div class="text-[11px] uppercase tracking-widest text-sky-300">Alert Summary</div>
+            <div class="mt-1 text-[13px] leading-relaxed" style="color: var(--text)">
+              {% if stats.openAlerts > 0 %}{{ stats.openAlerts }} alert{{ 's' if stats.openAlerts != 1 else '' }} require review.{% else %}No pending alerts. All systems operating normally.{% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

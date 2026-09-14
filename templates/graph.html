@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{# Port of src/components/views/GraphView.tsx. The whole network is rendered
+   server-side as one SVG at zoom=1 (dark values); app.js owns the interactions
+   that were React state — severity filter, zoom (+/−/100%/Fit), narrow auto-fit,
+   hover-to-isolate, the focus highlight from ?focus=a,b, and the light-mode
+   lane-text swap. Clicking a node fetches /graph/node/{id} into the drawer.
+   Context: graph {nodes,edges,bankNames,clusters,height}, node_index, graph_w,
+   focus_ids. #}
+{% from "_macros.html" import severity_badge %}
+
+{% block content %}
+{% set W = graph_w %}
+{% set H = graph.height %}
+{% set banks = display_banks(graph.bankNames) %}
+{% set bank_by_name = {} %}
+{% for b in banks %}{% set _ = bank_by_name.update({b.name: b}) %}{% endfor %}
+{% set high_count = graph.nodes | selectattr('severity', 'equalto', 'high') | list | length %}
+{% set med_count = graph.nodes | selectattr('severity', 'equalto', 'medium') | list | length %}
+{% set web_clusters = graph.clusters | selectattr('kind', 'equalto', 'web') | list %}
+{% set pinned = [] %}
+{% for a in focus_ids %}{% if a in node_index %}{% set _ = pinned.append(a) %}{% endif %}{% endfor %}
+{% set viewport_h = min(760, max(520, H + 8)) %}
+
+<div class="min-h-full">
+  <div class="mx-auto w-full max-w-[1760px] px-4 sm:px-5 2xl:px-8 py-4 sm:py-5 space-y-4"
+       data-graph-root data-graph-w="{{ W }}" data-graph-h="{{ H }}" data-graph-focus="{{ pinned | join(',') }}">
+
+    {% if graph.nodes | length == 0 %}
+    {# Empty Page — no transactions yet. #}
+    <div class="flex h-full min-h-[420px] flex-col items-center justify-center gap-3">
+      <div class="text-[32px] opacity-30">◇</div>
+      <div class="text-[14px] font-medium" style="color: var(--text-strong)">No transactions yet</div>
+      <div class="text-[12.5px]" style="color: var(--muted-2)">Upload a CSV file to build the transaction graph.</div>
+    </div>
+    {% else %}
+
+    {# ── Network canvas ─────────────────────────────────────────────────── #}
+    <div class="rounded-2xl overflow-hidden border" style="background: var(--panel); border-color: var(--border)">
+      <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b" style="border-color: var(--border)">
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <div class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Network Canvas</div>
+          <span class="text-[11px] rounded px-1.5 py-0.5 border" style="border-color: var(--border); background: var(--chip); color: var(--muted)">
+            {{ graph.clusters | length }} clusters · {{ graph.nodes | length }} accounts
+          </span>
+          {% if high_count > 0 %}<span class="text-[11px] rounded px-1.5 py-0.5 bg-red-500/10 border border-red-500/25 text-red-300">{{ high_count }} high-risk</span>{% endif %}
+          {% if med_count > 0 %}<span class="text-[11px] rounded px-1.5 py-0.5 bg-amber-500/10 border border-amber-500/25 text-amber-300">{{ med_count }} medium</span>{% endif %}
+          {% if pinned %}
+          <span class="inline-flex items-center gap-1.5 text-[11px] rounded px-1.5 py-0.5 bg-sky-500/10 border border-sky-500/30 text-sky-200">
+            Focused on {{ pinned | length }} {{ 'account' if pinned | length == 1 else 'accounts' }} from the investigation
+            <a href="/graph" class="underline decoration-dotted hover:text-sky-100">clear</a>
+          </span>
+          {% endif %}
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+          <div class="flex gap-1">
+            {% for k in ["all", "high", "medium", "safe"] %}
+            <button type="button" data-graph-filter="{{ k }}"
+              class="text-[11.5px] rounded-md border px-2.5 py-1.5 capitalize transition lg:py-1 {% if k == 'all' %}border-emerald-500/40 bg-emerald-500/10 text-emerald-200{% else %}hover:bg-[var(--hover)]{% endif %}"
+              {% if k != 'all' %}style="border-color: var(--border); color: var(--text)"{% endif %}>{{ k }}</button>
+            {% endfor %}
+          </div>
+          <div class="hidden w-px h-5 lg:block" style="background: var(--border)"></div>
+          <div class="flex items-center gap-2">
+            <button type="button" data-graph-zoom="out" class="h-8 w-8 rounded-md border hover:bg-[var(--hover)] lg:h-7 lg:w-7" style="border-color: var(--border); color: var(--text)" aria-label="Zoom out">−</button>
+            <div class="text-[11px] font-mono w-10 text-center" style="color: var(--muted)" data-graph-zoom-label>100%</div>
+            <button type="button" data-graph-zoom="in" class="h-8 w-8 rounded-md border hover:bg-[var(--hover)] lg:h-7 lg:w-7" style="border-color: var(--border); color: var(--text)" aria-label="Zoom in">+</button>
+            <button type="button" data-graph-zoom="reset" class="text-[11px] rounded-md border px-2 py-1.5 hover:bg-[var(--hover)] lg:py-1" style="border-color: var(--border); color: var(--text)" title="Back to actual size — labels at full readability">100%</button>
+            <button type="button" data-graph-zoom="fit" class="text-[11px] rounded-md border px-2 py-1.5 hover:bg-[var(--hover)] lg:py-1" style="border-color: var(--border); color: var(--text)" title="Zoom out until the whole width fits">Fit</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="relative max-h-[60vh] lg:max-h-none" style="height: {{ viewport_h }}px; background: var(--bg)" data-graph-viewport>
+        <div class="absolute inset-0 overflow-auto" data-graph-scroll>
+          <svg width="{{ W }}" height="{{ H }}" viewBox="0 0 {{ W }} {{ H }}" style="display: block" data-graph-svg>
+            <defs>
+              <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" /></marker>
+              <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" /></marker>
+              <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#22c55e" /></marker>
+              <radialGradient id="redGlow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="rgba(239,68,68,0.5)" /><stop offset="100%" stop-color="rgba(239,68,68,0)" /></radialGradient>
+            </defs>
+
+            {# ── Cluster cards ── #}
+            {% for c in graph.clusters %}
+            {% set r = 14 %}{% set hb = 34 %}
+            {% set head = "M " ~ c.x ~ " " ~ (c.y + r) ~ " A " ~ r ~ " " ~ r ~ " 0 0 1 " ~ (c.x + r) ~ " " ~ c.y ~ " L " ~ (c.x + c.w - r) ~ " " ~ c.y ~ " A " ~ r ~ " " ~ r ~ " 0 0 1 " ~ (c.x + c.w) ~ " " ~ (c.y + r) ~ " L " ~ (c.x + c.w) ~ " " ~ (c.y + hb) ~ " L " ~ c.x ~ " " ~ (c.y + hb) ~ " Z" %}
+            <g data-graph-cluster data-cluster-nodes="{{ c.nodeIds | join(',') }}">
+              <rect x="{{ c.x }}" y="{{ c.y }}" width="{{ c.w }}" height="{{ c.h }}" rx="{{ r }}" fill="{{ c.color }}08" stroke="{{ c.color }}2E" stroke-width="1"{% if c.kind == 'pairs' %} stroke-dasharray="7 6"{% endif %} />
+              <path d="{{ head }}" fill="{{ c.color }}1C" />
+              <line x1="{{ c.x }}" y1="{{ c.y + hb }}" x2="{{ c.x + c.w }}" y2="{{ c.y + hb }}" stroke="{{ c.color }}2E" stroke-width="1" />
+              <circle cx="{{ c.x + 17 }}" cy="{{ c.y + 18 }}" r="3.5" fill="{{ c.color }}" />
+              <text x="{{ c.x + 29 }}" y="{{ c.y + 22 }}" font-size="11.5" fill="{{ c.color }}" data-lane-hue="{{ c.color }}" letter-spacing="0.09em" font-weight="700">{{ c.label | upper }}</text>
+              <text x="{{ c.x + c.w - 16 }}" y="{{ c.y + 22 }}" font-size="10.5" text-anchor="end" fill="#94a3b8" class="font-mono">{{ c.count }} {{ 'pairs' if c.kind == 'pairs' else 'accounts' }} · {{ formatINR(c.total) }}</text>
+            </g>
+            {% endfor %}
+
+            {# ── Edges ── #}
+            {% for e in graph.edges %}
+            {% set s = node_index[e.source] %}{% set t = node_index[e.target] %}
+            {% set color = severityColor(e.severity) %}{% set is_high = e.severity == 'high' %}
+            {% set marker = 'url(#arrowRed)' if e.severity == 'high' else 'url(#arrowAmber)' if e.severity == 'medium' else 'url(#arrowGreen)' %}
+            <g data-graph-edge data-edge-id="{{ e.id }}" data-edge-source="{{ e.source }}" data-edge-target="{{ e.target }}" data-edge-sev="{{ e.severity }}" style="transition: opacity 0.15s ease">
+              <path data-edge-path d="{{ curve_path(s.x, s.y, t.x, t.y) }}" fill="none" stroke="{{ color }}" stroke-opacity="{{ 0.8 if is_high else 0.5 }}" stroke-width="{{ 1.8 if is_high else 1.3 }}"{% if is_high %} stroke-dasharray="6 6"{% endif %} marker-end="{{ marker }}"{% if is_high %} class="animate-dashmove"{% endif %} />
+              <text data-edge-amount class="font-mono" x="{{ (s.x + t.x) / 2 }}" y="{{ (s.y + t.y) / 2 - 6 }}" text-anchor="middle" font-size="10" fill="{{ color }}" data-lane-hue="{{ color }}" style="paint-order: stroke; stroke: var(--bg); stroke-width: 3px; display: none">{{ formatINR(e.amount) }}</text>
+            </g>
+            {% endfor %}
+
+            {# ── Nodes ── #}
+            {% for n in graph.nodes %}
+            {% set dyn = bank_by_name.get(n.bankName) or (banks[0] if banks else {'color': '#64748b', 'code': '?'}) %}
+            {% set is_high = n.severity == 'high' %}
+            {% set color = severityColor(n.severity) %}
+            {% set deg = n.degree or 1 %}
+            {% set r = nodeRadius(deg) %}
+            {% set is_hub = deg >= 4 %}
+            {% set is_named = n.id in pinned %}
+            <g data-graph-node data-node-id="{{ n.id }}" data-node-sev="{{ n.severity }}" data-node-hub="{{ '1' if is_hub else '0' }}" transform="translate({{ '%.2f'|format(n.x) }}, {{ '%.2f'|format(n.y) }})" class="cursor-pointer" style="transition: opacity 0.15s ease">
+              {% if is_high %}<circle r="{{ r + 14 }}" fill="url(#redGlow)" />{% endif %}
+              <circle data-node-lit r="{{ r + 7 }}" fill="none" stroke="#38bdf8" stroke-opacity="0.95" stroke-width="2.4"{% if not is_named %} stroke-dasharray="3 3" stroke-opacity="0.5" stroke-width="1.4"{% endif %} style="{% if not is_named %}display: none{% endif %}" />
+              {% if is_high and is_hub %}
+              <circle r="{{ r + 4 }}" fill="none" stroke="#ef4444" stroke-opacity="0.5" stroke-width="1.5">
+                <animate attributeName="r" from="{{ r + 4 }}" to="{{ r + 18 }}" dur="1.6s" repeatCount="indefinite" />
+                <animate attributeName="opacity" from="0.7" to="0" dur="1.6s" repeatCount="indefinite" />
+              </circle>
+              {% endif %}
+              <circle data-node-disc r="{{ r }}" fill="#0d1117" stroke="{{ color }}" stroke-width="{{ 2.6 if is_hub else 1.6 }}" style="filter: drop-shadow(0 0 6px {{ color }}80); transition: r 0.15s ease" />
+              <circle r="{{ max(5, r * 0.38) }}" fill="{{ color }}" opacity="0.9" />
+              {% if is_hub %}<text y="4" text-anchor="middle" font-size="11" font-weight="700" fill="#0d1117">{{ deg }}</text>{% endif %}
+              <text data-node-label y="{{ r + 14 }}" text-anchor="middle" font-size="9.5" font-weight="{{ 700 if (is_hub or is_named) else 400 }}" fill="{{ '#7dd3fc' if is_named else '#e2e8f0' if is_hub else '#94a3b8' }}" class="font-mono" style="paint-order: stroke; stroke: var(--bg); stroke-width: 3px">{{ shortAccountLabel(n.label) }}</text>
+              <text data-node-meta data-lane-hue="{{ dyn.color }}" y="{{ r + 25 }}" text-anchor="middle" font-size="8.5" fill="{{ dyn.color }}" class="font-mono" style="paint-order: stroke; stroke: var(--bg); stroke-width: 3px;{% if not is_named %} display: none{% endif %}">{{ dyn.code }} · {{ formatINR(abs(n.balance)) }}</text>
+            </g>
+            {% endfor %}
+          </svg>
+        </div>
+
+        {% if high_count > 0 %}
+        <div class="graph-hud pointer-events-none absolute left-3 bottom-3 hidden rounded-md border border-red-500/25 px-2.5 py-1.5 text-[11px] font-mono text-red-300 lg:block" style="background: rgba(0,0,0,0.45)">{{ high_count }} HIGH RISK NODES DETECTED</div>
+        {% endif %}
+        <div class="graph-hud pointer-events-none absolute right-3 top-3 hidden rounded-md border px-2.5 py-1.5 text-[11px] font-mono lg:block" style="border-color: var(--border); background: rgba(0,0,0,0.45); color: var(--text)">Hover to isolate a ring · click for the full dossier</div>
+      </div>
+    </div>
+
+    {# ── Legend strip ── #}
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border px-4 py-2.5 text-[12px] lg:gap-x-6" style="background: var(--panel); border-color: var(--border); color: var(--text)">
+      {% for color, label in [("#ef4444", "High risk"), ("#f59e0b", "Medium risk"), ("#22c55e", "Safe")] %}
+      <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background: {{ color }}; box-shadow: 0 0 8px {{ color }}"></span><span>{{ label }}</span></div>
+      {% endfor %}
+      <span class="flex items-center gap-2">
+        <span class="grid place-items-center w-4 h-4 rounded-full border text-[8px] font-bold" style="border-color: var(--muted); color: var(--text)">n</span>
+        Number in a node = counterparties
+      </span>
+      <span class="w-full text-[11.5px] lg:ml-auto lg:w-auto" style="color: var(--muted)">
+        <span class="lg:hidden">Tap any node for its full dossier · pinch or use + to zoom in</span>
+        <span class="hidden lg:inline">Hover a ring to isolate it · click any node for the full dossier</span>
+      </span>
+    </div>
+
+    {# ── Reference panels ── #}
+    <div class="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3">
+      {# Cluster inspector #}
+      <section class="flex h-full min-h-0 flex-col rounded-2xl border p-4 lg:max-h-[392px]" style="background: var(--panel); border-color: var(--border)">
+        <div class="flex shrink-0 items-baseline justify-between gap-2">
+          <h3 class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Cluster inspector</h3>
+        </div>
+        <div class="mt-3 flex min-h-0 flex-1 flex-col">
+          <div class="grid shrink-0 grid-cols-4 gap-2 text-center">
+            {% for label, value, color in [("Nodes", graph.nodes|length, "#38bdf8"), ("Edges", graph.edges|length, "#a78bfa"), ("Rings", web_clusters|length, "#f59e0b"), ("High", high_count, "#ef4444")] %}
+            <div class="rounded-lg border p-2" style="border-color: {{ color }}33; background: {{ color }}0F">
+              <div class="text-[17px] font-semibold leading-none" style="color: var(--text-strong)">{{ value }}</div>
+              <div class="mt-1 text-[9.5px] uppercase tracking-widest" style="color: {{ color }}" data-lane-hue="{{ color }}">{{ label }}</div>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="h-px my-4 shrink-0" style="background: var(--border)"></div>
+          <div class="shrink-0 text-[11px] uppercase tracking-widest" style="color: var(--muted)">Institutions ({{ banks | length }})</div>
+          <div class="mt-2.5 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+            {% for b in banks %}
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 shrink-0 rounded-sm" style="background: {{ b.color }}; box-shadow: 0 0 8px {{ b.color }}"></span>
+              <span class="text-[12.5px] truncate" style="color: var(--text)">{{ b.name }}</span>
+              <span class="ml-auto text-[11px] font-mono" style="color: var(--muted)">{{ b.code }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      {# Detected typologies #}
+      <section class="flex h-full min-h-0 flex-col rounded-2xl border p-4 lg:max-h-[392px]" style="background: var(--panel); border-color: var(--border)">
+        <div class="flex shrink-0 items-baseline justify-between gap-2">
+          <h3 class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Detected typologies</h3>
+          <span class="font-mono text-[11px] tabular-nums" style="color: var(--muted-2)">{{ web_clusters | length }}</span>
+        </div>
+        <div class="mt-3 flex min-h-0 flex-1 flex-col">
+          <div class="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+            {% for c in web_clusters %}
+            <div class="flex items-center gap-2.5 rounded-lg border px-2.5 py-2" style="border-color: {{ c.color }}33; background: {{ c.color }}0D">
+              <span class="w-2 h-2 shrink-0 rounded-full" style="background: {{ c.color }}; box-shadow: 0 0 8px {{ c.color }}"></span>
+              <span class="min-w-0 flex-1">
+                <span class="block text-[12.5px] truncate" style="color: var(--text-strong)">{{ c.label }}</span>
+                <span class="block text-[10.5px]" style="color: var(--muted)">{{ c.count }} accounts</span>
+              </span>
+              <span class="shrink-0 text-right text-[12px] font-mono" style="color: {{ c.color }}" data-lane-hue="{{ c.color }}">{{ formatINR(c.total) }}</span>
+            </div>
+            {% endfor %}
+            {% if web_clusters | length == 0 %}
+            <div class="text-[12px]" style="color: var(--muted)">No multi-account rings in this dataset.</div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      {# Largest hops #}
+      <section class="flex h-full min-h-0 flex-col rounded-2xl border p-4 lg:max-h-[392px]" style="background: var(--panel); border-color: var(--border)">
+        <div class="flex shrink-0 items-baseline justify-between gap-2">
+          <h3 class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Largest hops</h3>
+          <span class="font-mono text-[11px] tabular-nums" style="color: var(--muted-2)">{{ min(graph.edges|length, 8) }}</span>
+        </div>
+        <div class="mt-3 flex min-h-0 flex-1 flex-col">
+          <div class="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+            {% for e in (graph.edges | sort(attribute='amount', reverse=true))[:8] %}
+            {% set s = node_index[e.source] %}{% set t = node_index[e.target] %}
+            <div class="flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-[12px]" style="background: var(--bg); border-color: var(--border)">
+              <span class="grid h-4 w-4 shrink-0 place-items-center rounded text-[9.5px] font-semibold" style="background: {{ severityColor(e.severity) }}1F; color: {{ severityColor(e.severity) }}">{{ loop.index }}</span>
+              <span class="min-w-0 flex-1 truncate font-mono" style="color: var(--muted)">{{ shortAccountLabel(s.label if s else e.source) }} → {{ shortAccountLabel(t.label if t else e.target) }}</span>
+              <span class="shrink-0 font-mono" style="color: var(--text-strong)">{{ formatINR(e.amount) }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+    </div>
+
+    {# ── Edge log ── #}
+    <div class="rounded-2xl border overflow-hidden" style="background: var(--panel); border-color: var(--border)">
+      <div class="flex items-center justify-between px-4 py-3 border-b" style="border-color: var(--border)">
+        <div class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Edge Log</div>
+        <div class="text-[11px] font-mono tabular-nums" style="color: var(--muted)"><span data-edge-events>{{ graph.edges | length }}</span> events</div>
+      </div>
+      <div class="max-h-[340px] overflow-auto">
+        <table class="w-full text-[12px]">
+          <thead class="sticky top-0 z-10">
+            <tr class="text-left text-[10.5px] uppercase tracking-widest backdrop-blur" style="color: var(--muted); background: var(--panel-strong)">
+              <th class="px-4 py-2 font-medium whitespace-nowrap">Time</th>
+              <th class="px-4 py-2 font-medium">From</th>
+              <th class="px-4 py-2 font-medium">To</th>
+              <th class="px-4 py-2 font-medium text-right whitespace-nowrap">Amount</th>
+              <th class="px-4 py-2 font-medium">Severity</th>
+              <th class="px-4 py-2 font-medium">Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in graph.edges %}
+            {% set s = node_index[e.source] %}{% set t = node_index[e.target] %}
+            <tr class="border-t hover:bg-[var(--hover)]" style="border-color: var(--border)" data-edge-log-row data-edge-id="{{ e.id }}">
+              <td class="px-4 py-2 font-mono whitespace-nowrap tabular-nums" style="color: var(--muted)">{{ e.timestamp }}</td>
+              <td class="px-4 py-2 font-mono" style="color: var(--text)">{{ s.hash if s else e.source }}</td>
+              <td class="px-4 py-2 font-mono" style="color: var(--text)">{{ t.hash if t else e.target }}</td>
+              <td class="px-4 py-2 text-right font-mono whitespace-nowrap tabular-nums">{{ formatINR(e.amount) if e.currency == 'INR' else e.currency ~ ' ' ~ format_en_in(e.amount) }}</td>
+              <td class="px-4 py-2">{{ severity_badge(e.severity) }}</td>
+              <td class="px-4 py-2" style="color: var(--muted)">{{ e.note or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# ── Node dossier drawer (filled by app.js from /graph/node/{id}) ── #}
+    <div data-drawer-overlay class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity"></div>
+    <aside data-drawer class="fixed right-0 top-0 z-50 h-[100dvh] w-[460px] max-w-full translate-x-full transition-transform duration-300">
+      <div data-drawer-body class="flex h-full min-h-0 flex-col border-l" style="background: var(--panel); border-color: var(--border)"></div>
+    </aside>
+
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

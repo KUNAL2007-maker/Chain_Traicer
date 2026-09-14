@@ -1,0 +1,11 @@
+# FinGuard Intelligence — Python (FastAPI + Jinja2/HTMX) runtime.
+# Pure-stdlib everywhere it is possible: SQLite (sqlite3), password hashing
+# (hashlib.pbkdf2_hmac), sessions (itsdangerous via Starlette). No native build
+# deps, so `pip install -r requirements.txt` works on a clean Windows box.
+fastapi>=0.110
+uvicorn[standard]>=0.29
+jinja2>=3.1
+python-multipart>=0.0.9
+websockets>=12.0
+itsdangerous>=2.1
+python-dotenv>=1.0

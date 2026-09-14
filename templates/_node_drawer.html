@@ -1,0 +1,155 @@
+{# Port of src/components/NodeDetailDrawer.tsx — rendered by GET /graph/node/{id}
+   and injected by app.js into the drawer aside in graph.html. The per-account
+   analysis is computed server-side in webutil.node_dossier and arrives as `d`.
+   "Escalate to SAR" is a PRG POST to /sar/create (account = node id); the filed
+   state and its "Open →" link read the SARReport already on file (d.existing). #}
+{% from "_macros.html" import severity_badge %}
+{% set n = d.node %}
+
+<div class="shrink-0 border-b p-5 [@media(max-height:820px)]:p-4" style="border-color: var(--border)">
+  <div class="flex items-start gap-3">
+    <div class="w-10 h-10 rounded-lg grid place-items-center"
+         style="background: {{ severityColor(n.severity) }}22; color: {{ severityColor(n.severity) }};{% if n.severity == 'high' %} box-shadow: 0 0 16px rgba(239,68,68,0.45);{% endif %}">
+      ◉
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Anonymized handle</span>
+        {{ severity_badge(n.severity, 'md') }}
+      </div>
+      <div class="mt-1 font-mono text-[16px] break-all" style="color: var(--text-strong)">{{ n.hash }}</div>
+      <div class="text-[12px]" style="color: var(--muted-2)">{{ n.label }}</div>
+      {% if d.dominant %}
+      <span class="mt-1.5 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px]"
+            style="border-color: {{ d.dominant.color }}55; background: {{ d.dominant.color }}18; color: {{ d.dominant.color }}">
+        <span class="w-1.5 h-1.5 rounded-full" style="background: {{ d.dominant.color }}"></span>
+        {{ d.dominant.label }}
+      </span>
+      {% endif %}
+    </div>
+    <button type="button" data-drawer-close class="text-lg leading-none px-1" style="color: var(--muted)" aria-label="Close">×</button>
+  </div>
+  <div class="mt-4 grid grid-cols-3 gap-2 [@media(max-height:820px)]:mt-3">
+    {% set mini = [
+      ("Role in ring", d.flow.role, "#a78bfa"),
+      ("Received (" ~ d.flow.inCount ~ ")", formatINR(d.flow.inAmount), "#38bdf8"),
+      ("Sent (" ~ d.flow.outCount ~ ")", formatINR(d.flow.outAmount), "#f59e0b")
+    ] %}
+    {% for label, value, color in mini %}
+    <div class="rounded-lg border px-2.5 py-2" style="border-color: {{ color }}33; background: {{ color }}0E">
+      <div class="text-[10px] uppercase tracking-widest" style="color: {{ color }}">{{ label }}</div>
+      <div class="mt-0.5 text-[13px] font-medium truncate" style="color: var(--text-strong)">{{ value }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-5 [@media(max-height:820px)]:p-4">
+  {% if d.read %}
+  <section>
+    <div class="flex items-center justify-between gap-2">
+      <span class="text-[11px] uppercase tracking-widest text-emerald-300">AI explanation</span>
+      <span class="shrink-0 text-[10px] rounded px-1.5 py-0.5 bg-emerald-500/15 border border-emerald-500/25 text-emerald-300">{{ d.confidence }}% confident</span>
+    </div>
+    <div class="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3">
+      <p class="text-[13.5px] leading-snug" style="color: var(--text-strong)">{{ d.read.line }}</p>
+      {% if d.read.facts %}
+      <ul class="mt-2 space-y-1">
+        {% for f in d.read.facts %}
+        <li class="flex gap-1.5 text-[12px]" style="color: var(--muted)"><span class="text-emerald-400/70">·</span><span>{{ f }}</span></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if d.patterns %}
+  <section>
+    <div class="text-[11px] uppercase tracking-widest mb-2" style="color: var(--muted)">Typologies matched ({{ d.patterns|length }})</div>
+    <div class="space-y-1.5">
+      {% for p in d.patterns %}
+      <div class="flex items-center gap-2 rounded-lg border px-2.5 py-2" style="border-color: {{ p.color }}33; background: {{ p.color }}0D">
+        <span class="w-2 h-2 rounded-full" style="background: {{ p.color }}; box-shadow: 0 0 8px {{ p.color }}"></span>
+        <span class="text-[12.5px]" style="color: var(--text)">{{ p.label }}</span>
+        <span class="text-[10px] font-mono" style="color: var(--muted-2)">{{ p.code }}</span>
+        <span class="ml-auto text-[11px] font-mono" style="color: var(--muted)">{{ p.count }} hop{{ 's' if p.count > 1 else '' }} · {{ formatINR(p.amount) }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section>
+    <div class="text-[11px] uppercase tracking-widest mb-2" style="color: var(--muted)">Timeline breakdown ({{ d.related_count }} events)</div>
+    <ol class="relative border-l border-white/10 pl-4 space-y-3">
+      {% for e in d.timeline %}
+      <li class="relative">
+        <span class="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full" style="background: {{ severityColor(e.severity) }}; box-shadow: 0 0 8px {{ severityColor(e.severity) }}"></span>
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-mono" style="color: var(--muted)">{{ e.timestamp }}</span>
+          <span class="text-[10px] rounded px-1.5 py-0.5 border {{ 'border-red-500/25 bg-red-500/10 text-red-300' if e.dir == 'out' else 'border-sky-500/25 bg-sky-500/10 text-sky-300' }}">{{ '→ outbound' if e.dir == 'out' else '← inbound' }}</span>
+          {{ severity_badge(e.severity) }}
+        </div>
+        <div class="mt-1 text-[13px]" style="color: var(--text)">
+          {{ e.amount_label }} <span style="color: var(--muted)">{{ 'to' if e.dir == 'out' else 'from' }}</span> <span class="font-mono">{{ e.other_label }}</span>
+        </div>
+        {% if e.note %}<div class="text-[11.5px] italic" style="color: var(--muted-2)">— {{ e.note }}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    {% if d.timeline_more > 0 %}
+    <div class="mt-2 pl-4 text-[11.5px]" style="color: var(--muted-2)">+ {{ d.timeline_more }} more transfer{{ 's' if d.timeline_more > 1 else '' }} on this account</div>
+    {% endif %}
+  </section>
+
+  {% if d.connected_banks %}
+  <section>
+    <div class="text-[11px] uppercase tracking-widest mb-2" style="color: var(--muted)">Banks involved</div>
+    <div class="flex flex-wrap gap-2">
+      {% for b in d.connected_banks %}
+      <span class="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[12px]" style="border-color: {{ b.color }}44; background: {{ b.color }}12; color: {{ b.color }}">
+        <span class="w-1.5 h-1.5 rounded-full" style="background: {{ b.color }}"></span>{{ b.name }}
+      </span>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section>
+    <div class="text-[11px] uppercase tracking-widest mb-2" style="color: var(--muted)">Risk signals</div>
+    <div class="grid grid-cols-2 gap-2">
+      {% set bars = [
+        ("Velocity anomaly", d.signals.velocity, "#ef4444"),
+        ("Fan-out ratio", d.signals.fanOut, "#f59e0b"),
+        ("Counterparty risk", d.signals.counterparty, "#f59e0b"),
+        ("Cross-bank spread", d.signals.spread, "#38bdf8")
+      ] %}
+      {% for label, value, color in bars %}
+      <div class="rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
+        <div class="flex items-center justify-between text-[11px]">
+          <span style="color: var(--text)">{{ label }}</span>
+          <span class="font-mono" style="color: {{ color }}">{{ value }}</span>
+        </div>
+        <div class="mt-1.5 h-1 rounded-full bg-white/5 overflow-hidden">
+          <div class="h-full" style="width: {{ value }}%; background: linear-gradient(90deg, {{ color }}, {{ color }}55)"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<div class="shrink-0 border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))]" style="border-color: var(--border); background: var(--panel-strong)">
+  {% if d.existing %}
+  <div class="flex items-center gap-2">
+    <div class="flex-1 min-w-0 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12.5px] text-emerald-200">✓ Report filed · {{ d.existing.status }}</div>
+    <a href="/sar?selected={{ d.existing.id }}" class="shrink-0 rounded-lg border px-3 py-2 text-[13px] hover:bg-[var(--hover)] transition" style="border-color: var(--border); color: var(--text); background: var(--chip)">Open →</a>
+  </div>
+  {% else %}
+  <form method="post" action="/sar/create">
+    <input type="hidden" name="account" value="{{ n.id }}" />
+    <button type="submit" class="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 px-3 py-2 text-[13px] text-emerald-200 shadow-glow transition">Escalate to SAR →</button>
+  </form>
+  {% endif %}
+</div>

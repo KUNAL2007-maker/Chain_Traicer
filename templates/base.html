@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+{# The Python/Jinja port of layout.tsx + AppShell.tsx + Sidebar.tsx + TopBar.tsx.
+   Tailwind's utilities come from the Play CDN; the inline tailwind.config below
+   reproduces tailwind.config.ts verbatim (darkMode:'class' added, since the SPA
+   set <html class="dark"> and relied on the class strategy). globals.css lives in
+   /static/css/app.css. #}
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#07090d" />
+  <title>FinGuard Intelligence · Cross-Bank Financial Crime Command</title>
+
+  {# Theme flash guard: apply the saved theme before first paint. sessionStorage,
+     not localStorage — a fresh browser session starts dark (mirrors ThemeProvider,
+     which defaulted dark with no restore); the choice only persists across the
+     full-page navigations the SPA used to do in-memory. #}
+  <script>
+    (function () {
+      try {
+        var t = sessionStorage.getItem('finguard-theme');
+        var cls = t === 'light' ? 'light' : 'dark';
+        document.documentElement.classList.remove('light', 'dark');
+        document.documentElement.classList.add(cls);
+      } catch (e) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          gridTemplateColumns: { '24': 'repeat(24, minmax(0, 1fr))' },
+          colors: {
+            finguard: {
+              bg: '#07090d', panel: '#0d1117', panel2: '#121821',
+              border: '#1f2937', muted: '#94a3b8', neon: '#22c55e',
+              neon2: '#10b981', amber: '#f59e0b', danger: '#ef4444',
+              info: '#38bdf8', purple: '#a78bfa'
+            }
+          },
+          fontFamily: {
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
+          },
+          boxShadow: {
+            glow: '0 0 24px rgba(34,197,94,0.25)',
+            glowRed: '0 0 24px rgba(239,68,68,0.35)',
+            glowAmber: '0 0 24px rgba(245,158,11,0.25)'
+          },
+          keyframes: {
+            pulseRed: { '0%,100%': { boxShadow: '0 0 0 0 rgba(239,68,68,0.6)' }, '50%': { boxShadow: '0 0 0 12px rgba(239,68,68,0)' } },
+            pulseAmber: { '0%,100%': { boxShadow: '0 0 0 0 rgba(245,158,11,0.5)' }, '50%': { boxShadow: '0 0 0 10px rgba(245,158,11,0)' } },
+            scan: { '0%': { transform: 'translateX(-100%)' }, '100%': { transform: 'translateX(100%)' } },
+            dashmove: { to: { strokeDashoffset: '-40' } },
+            blink: { '0%,100%': { opacity: '1' }, '50%': { opacity: '0.35' } }
+          },
+          animation: {
+            pulseRed: 'pulseRed 1.6s ease-out infinite',
+            pulseAmber: 'pulseAmber 2s ease-out infinite',
+            scan: 'scan 2.4s linear infinite',
+            dashmove: 'dashmove 1s linear infinite',
+            blink: 'blink 1.4s ease-in-out infinite'
+          }
+        }
+      }
+    };
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/app.css" />
+
+  <style>
+    /* MPA-only helpers (no equivalent in globals.css). The theme toggle can't know
+       the client theme at render time, so both icon/label variants ship and CSS
+       shows the right one per <html> class — no post-load flicker. */
+    html.dark .theme-light-only { display: none !important; }
+    html.light .theme-dark-only { display: none !important; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="min-h-screen" style="background-color: var(--bg); color: var(--text)">
+  <div class="flex h-[100dvh] overflow-hidden radial-glow" style="background-color: var(--bg)">
+
+    {# ── Sidebar (Sidebar.tsx). Off-canvas drawer below lg, static rail from lg up. #}
+    <aside id="app-nav" aria-label="Main navigation"
+      class="fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-[272px] shrink-0 flex-col border-r transition-transform duration-300 -translate-x-full lg:static lg:z-auto lg:h-full lg:w-64 lg:translate-x-0 lg:transition-none 2xl:w-72"
+      style="border-color: var(--border); background: var(--panel)">
+      <div class="px-5 pt-5 pb-4 flex items-center gap-3">
+        <div class="relative w-9 h-9 shrink-0 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-700 grid place-items-center shadow-glow">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" stroke="#052e1a" stroke-width="1.6" stroke-linejoin="round" fill="rgba(255,255,255,0.15)" />
+            <path d="M9 12l2 2 4-4" stroke="#052e1a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <div class="text-[15px] font-semibold tracking-wide truncate" style="color: var(--text-strong)">
+            FinGuard <span class="text-emerald-400">Intelligence</span>
+          </div>
+          <div class="text-[10px] uppercase tracking-widest truncate" style="color: var(--muted)">
+            Consortium AML Console
+          </div>
+        </div>
+        <button type="button" data-nav-close aria-label="Close navigation"
+          class="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-md border transition hover:bg-[var(--hover)] lg:hidden"
+          style="border-color: var(--border); color: var(--muted)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="h-px shrink-0" style="background: var(--border)"></div>
+
+      <nav class="p-3 flex flex-col gap-1 overflow-y-auto">
+        {% for item in NAV %}
+        {% set is_active = (item.key == active) %}
+        <a href="{{ item.href }}"
+          {% if is_active %}aria-current="page"{% endif %}
+          class="group relative w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all {{ 'bg-emerald-500/10 border border-emerald-500/30 shadow-glow' if is_active else 'border border-transparent hover:bg-[var(--hover)]' }}"
+          style="color: {{ 'var(--text-strong)' if is_active else 'var(--muted)' }}">
+          <span class="grid place-items-center w-8 h-8 shrink-0 rounded-md {{ 'bg-emerald-500/15 text-emerald-300' if is_active else '' }}"
+            {% if not is_active %}style="background: var(--chip)"{% endif %}>
+            {{ item.icon | safe }}
+          </span>
+          <span class="flex-1 min-w-0">
+            <div class="text-sm font-medium leading-tight truncate">{{ item.label }}</div>
+            <div class="text-[11px] truncate" style="color: var(--muted-2)">{{ item.hint }}</div>
+          </span>
+          {% if is_active %}<span class="w-1.5 h-1.5 shrink-0 rounded-full bg-emerald-400 shadow-glow"></span>{% endif %}
+        </a>
+        {% endfor %}
+      </nav>
+
+      <div class="mt-auto p-4 shrink-0">
+        <div class="rounded-xl p-3 border flex items-center gap-2" style="background: var(--chip); border-color: var(--border)">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 grid place-items-center text-[11px] font-semibold text-white">
+            {{ initials(user.fullName, user.email) }}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-[12px] truncate" style="color: var(--text)">{{ user.fullName or "User" }}</div>
+            <div class="text-[11px] truncate" style="color: var(--muted-2)">{{ user.email or "" }}</div>
+          </div>
+          <form method="post" action="/logout" class="contents">
+            <button type="submit" title="Sign out"
+              class="grid place-items-center w-7 h-7 rounded-md hover:bg-red-500/15 text-slate-400 hover:text-red-300 transition">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </form>
+        </div>
+      </div>
+    </aside>
+
+    {# Mobile backdrop — tapping it closes the drawer. Hidden until JS opens the nav. #}
+    <div data-nav-backdrop class="fixed inset-0 z-40 bg-black/50 lg:hidden hidden"></div>
+
+    <div class="flex-1 flex flex-col min-w-0">
+      {# ── TopBar (TopBar.tsx) #}
+      <header class="shrink-0 z-20 border-b backdrop-blur" style="border-color: var(--border); background: var(--panel-strong)">
+        <div class="mx-auto w-full max-w-[1760px] {{ PAGE_GUTTER }} flex items-center gap-2 sm:gap-4 py-3">
+          <button type="button" data-nav-open aria-label="Open navigation" aria-controls="app-nav"
+            class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border transition hover:bg-[var(--hover)] lg:hidden"
+            style="border-color: var(--border); background: var(--chip); color: var(--text)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+            </svg>
+          </button>
+
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <div class="text-[11px] uppercase tracking-widest truncate" style="color: var(--muted)">FinGuard Intelligence</div>
+              <span class="hidden sm:inline text-[10px] rounded px-1.5 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">SECURE</span>
+            </div>
+            <div class="mt-0.5 text-[15px] sm:text-[18px] font-semibold leading-tight truncate" style="color: var(--text-strong)">{{ titles.title }}</div>
+            <div class="hidden sm:block text-[12px] truncate" style="color: var(--muted-2)">{{ titles.sub }}</div>
+          </div>
+
+          <div class="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+            {# Live feed toggle — cosmetic in the MPA (the SPA drove a simulated
+               ticker); state persisted in sessionStorage by app.js. Default ON. #}
+            <button type="button" data-live-toggle aria-pressed="true"
+              class="flex h-9 items-center gap-2 whitespace-nowrap rounded-lg border px-2.5 sm:px-3 transition border-emerald-500/40 bg-emerald-500/10 text-emerald-200 shadow-glow">
+              <span data-live-dot class="h-2 w-2 rounded-full bg-emerald-400 animate-blink"></span>
+              <span data-live-label class="hidden sm:inline text-[12px]">Live feed · ON</span>
+            </button>
+
+            {# Theme toggle — both variants rendered, CSS shows the right one. #}
+            <button type="button" data-theme-toggle
+              class="flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 sm:px-3 transition hover:bg-[var(--hover)]"
+              style="border-color: var(--border); background: var(--chip); color: var(--text)">
+              <span class="theme-dark-only grid place-items-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="1.6" />
+                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                </svg>
+              </span>
+              <span class="theme-light-only grid place-items-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+                </svg>
+              </span>
+              <span class="theme-dark-only hidden sm:inline text-[12px]">Light</span>
+              <span class="theme-light-only hidden sm:inline text-[12px]">Dark</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 min-h-0 min-w-0 overflow-y-auto scroll-stable">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  {# Body-level slot: the SAR print portal must be a direct child of <body> so the
+     print stylesheet's `body > *:not(#sar-print-portal)` rule can hide the shell
+     around it. Anything here sits outside the app chrome. #}
+  {% block body_extra %}{% endblock %}
+
+  <script src="/static/js/app.js" defer></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

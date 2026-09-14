@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{# Port of src/components/views/InvestigatorChat.tsx. The transcript, sending,
+   thinking states, cooldown countdown and localStorage persistence all live in
+   the chat module of static/js/app.js — this is the one genuinely interactive
+   island, so the server renders the static shell (agent fleet, suggested
+   queries, session context, composer) with data-* hooks and hands app.js a JSON
+   config. "View on graph" becomes a real link to /graph?focus=<accounts>. #}
+
+{% block content %}
+<div class="min-h-full">
+  <div class="mx-auto w-full max-w-[1760px] px-4 sm:px-5 2xl:px-8 py-4 sm:py-5 lg:h-[calc(100dvh-var(--topbar,64px))]">
+
+    {# Config for app.js — agent colours/icons, order, this user's storage key. #}
+    <script type="application/json" data-chat-config>
+      {{ {
+        "uid": user.uid,
+        "txCount": txs | length,
+        "agentOrder": CHAT_AGENTS,
+        "agentMeta": AGENT_META,
+        "levelText": {"high": "High risk", "medium": "Needs a look", "safe": "Clear"}
+      } | tojson }}
+    </script>
+
+    <div class="grid gap-4 lg:h-full lg:min-h-0 lg:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)]">
+
+      {# ── Left rail ── #}
+      <aside class="space-y-4 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
+        {# Agent Fleet #}
+        <div class="rounded-2xl p-4 border" style="background: var(--panel); border-color: var(--border)">
+          <div class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Agent Fleet</div>
+          <div class="mt-1 text-[15px] font-semibold" style="color: var(--text-strong)">4 specialists · collaborating</div>
+          <div class="mt-3 space-y-2">
+            {% for a in CHAT_AGENTS %}
+            {% set m = AGENT_META[a] %}
+            <div class="flex items-start gap-2.5 rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
+              <span class="grid place-items-center w-8 h-8 rounded-md text-[14px]" style="background: {{ m.bg }}; color: {{ m.color }}">{{ m.icon }}</span>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <div class="text-[13px] truncate" style="color: var(--text-strong)">{{ a }}</div>
+                  <span class="w-1.5 h-1.5 rounded-full" style="background: {{ m.color }}; box-shadow: 0 0 8px {{ m.color }}"></span>
+                </div>
+                <div class="text-[11.5px]" style="color: var(--muted-2)">{{ m.role }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <button type="button" data-chat-run-investigation {% if txs|length == 0 %}disabled{% endif %}
+            class="mt-3 w-full rounded-lg border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 px-3 py-2 text-[12.5px] font-medium shadow-glow transition disabled:opacity-50">⚡ Run full investigation</button>
+        </div>
+
+        {# Suggested queries #}
+        <div class="rounded-2xl p-4 border" style="background: var(--panel); border-color: var(--border)">
+          <div class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Try asking</div>
+          <div class="mt-3 flex flex-col gap-2">
+            {% for q in SUGGESTED_QUERIES %}
+            <button type="button" data-chat-suggest="{{ q }}"
+              class="text-left text-[12.5px] rounded-lg border px-3 py-2 hover:bg-[var(--hover)] disabled:opacity-50"
+              style="border-color: var(--border); background: var(--chip); color: var(--text)">{{ q }}</button>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# Session context #}
+        <div class="rounded-2xl p-4 border" style="background: var(--panel); border-color: var(--border)">
+          <div class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Session context</div>
+          <div class="mt-2 space-y-1.5 text-[12px]">
+            <div class="flex items-center justify-between gap-2"><span style="color: var(--muted-2)">Transactions</span><span class="min-w-0 truncate" style="color: var(--text)" data-chat-ctx-tx>{{ txs | length }}</span></div>
+            <div data-chat-ctx-analysis class="flex items-center justify-between gap-2"><span style="color: var(--muted-2)">Analysis</span><span class="min-w-0 truncate" style="color: var(--text)">not run yet</span></div>
+            <div data-chat-ctx-evidence hidden>
+              <div class="flex items-center justify-between gap-2"><span style="color: var(--muted-2)">Accounts traced</span><span class="min-w-0 truncate" style="color: var(--text)" data-chat-ctx-accounts>0</span></div>
+              <div class="flex items-center justify-between gap-2"><span style="color: var(--muted-2)">Rings found</span><span class="min-w-0 truncate" style="color: var(--text)" data-chat-ctx-rings>0</span></div>
+              <div class="flex items-center justify-between gap-2"><span style="color: var(--muted-2)">Hard findings</span><span class="min-w-0 truncate" style="color: var(--text)" data-chat-ctx-findings>0</span></div>
+              <div class="flex items-center justify-between gap-2"><span style="color: var(--muted-2)">High-risk rows</span><span class="min-w-0 truncate" style="color: var(--text)" data-chat-ctx-high>0</span></div>
+            </div>
+            <div class="flex items-center justify-between gap-2"><span style="color: var(--muted-2)">Model</span><span class="min-w-0 truncate font-mono" style="color: var(--text)" data-chat-ctx-model title="models/gemini-3.1-flash-live-preview">gemini · 3.1-flash-live</span></div>
+          </div>
+        </div>
+      </aside>
+
+      {# ── Chat surface ── #}
+      <section class="order-first flex min-w-0 flex-col lg:order-none lg:min-h-0">
+        <div class="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-2xl border" style="background: var(--panel); border-color: var(--border)">
+          <div class="shrink-0 px-4 py-3 border-b flex flex-wrap items-center justify-between gap-3" style="border-color: var(--border)">
+            <div class="flex min-w-0 items-center gap-3">
+              <div class="grid place-items-center w-8 h-8 shrink-0 rounded-md bg-emerald-500/15 text-emerald-300 shadow-glow">◉</div>
+              <div class="min-w-0">
+                <div class="text-[13px] font-medium" style="color: var(--text-strong)">Investigator Console</div>
+                <div class="text-[11px] truncate" style="color: var(--muted-2)">Answers synthesized across 4 agents · confidence-weighted</div>
+              </div>
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <button type="button" data-chat-export class="text-[11px] rounded-md border px-2 py-1 hover:bg-[var(--hover)]" style="border-color: var(--border); background: var(--chip); color: var(--text)">Export transcript</button>
+              <button type="button" data-chat-reset class="text-[11px] rounded-md border px-2 py-1 hover:bg-[var(--hover)]" style="border-color: var(--border); background: var(--chip); color: var(--text)">Reset session</button>
+            </div>
+          </div>
+
+          <div data-chat-scroll class="min-h-0 flex-1 overflow-y-auto p-5 space-y-4">
+            <div data-chat-messages class="space-y-4"></div>
+            <div data-chat-thinking hidden class="flex items-center gap-2 text-[12px]" style="color: var(--muted)">
+              <span data-chat-thinking-dot class="w-2 h-2 rounded-full animate-blink" style="background: #22c55e"></span>
+              <span data-chat-thinking-label style="color: #22c55e">Assistant</span>
+              <span>is analyzing</span>
+              <span class="inline-flex gap-0.5">
+                <span class="w-1 h-1 rounded-full bg-slate-400 animate-blink"></span>
+                <span class="w-1 h-1 rounded-full bg-slate-400 animate-blink" style="animation-delay: 200ms"></span>
+                <span class="w-1 h-1 rounded-full bg-slate-400 animate-blink" style="animation-delay: 400ms"></span>
+              </span>
+            </div>
+            <div data-chat-notice hidden class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12.5px] text-amber-200"></div>
+            <div data-chat-error hidden class="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[13px] text-red-300"></div>
+          </div>
+
+          <div class="shrink-0 border-t p-3" style="border-color: var(--border)">
+            <div class="rounded-xl px-3 py-2 flex items-center gap-2 border" style="background: var(--chip); border-color: var(--border)">
+              <span class="text-[13px] font-mono" style="color: var(--muted-2)">›</span>
+              <input data-chat-input type="text" placeholder='Ask "Why is Shell Alpha suspicious?" or "Show transfers > ₹10 lakh today"'
+                class="min-w-0 flex-1 bg-transparent outline-none text-[13.5px]" style="color: var(--text)" />
+              <span class="hidden md:inline text-[10.5px] rounded px-1.5 py-0.5 font-mono border" style="background: var(--chip); border-color: var(--border); color: var(--muted)">⏎ send</span>
+              <button type="button" data-chat-send class="rounded-md border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 text-[12.5px] px-3 py-1.5 shadow-glow disabled:opacity-50">Ask fleet</button>
+            </div>
+            <div class="mt-2 flex items-center gap-2 text-[11px]" style="color: var(--muted)">
+              <span class="w-1.5 h-1.5 shrink-0 rounded-full bg-emerald-400 animate-blink"></span>
+              Answers are grounded in the <span data-chat-txcount>{{ txs | length }}</span> transactions you uploaded — no generic advice.
+            </div>
+            <noscript><div class="mt-2 text-[11px] text-amber-300">The investigator console needs JavaScript enabled.</div></noscript>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

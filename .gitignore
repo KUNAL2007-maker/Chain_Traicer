@@ -24,3 +24,20 @@ new raisoni/
 # that are outputs of the project, not source.
 deliverables/
 tsconfig.tsbuildinfo
+
+# ── Python backend (FastAPI port) ───────────────────────────────────────────
+# Bytecode and caches.
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+# Virtualenvs.
+.venv/
+venv/
+env/
+# Runtime SQLite database — created on first run, holds local data, never source.
+*.db
+*.sqlite
+*.sqlite3
