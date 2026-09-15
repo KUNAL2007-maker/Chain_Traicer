@@ -668,6 +668,67 @@ class ForensicTraceEngine:
                 "evidence_ledger": btc_res["raw_evidence_records"]
             }
 
+        # Step 0b: TRON (TRC-20) Dispatch Routing
+        if route_meta.get("family") == "TRON" or network == "tron-mainnet":
+            from .tron_tracer import TronTracer
+            tron_engine = TronTracer(alchemy_client=self.client, usd_to_inr=self.usd_to_inr)
+            tron_res = tron_engine.trace(
+                suspect_address=root_address,
+                max_depth=max_depth,
+                crime_timestamp=crime_timestamp
+            )
+            t_elapsed = time.time() - t_start
+            track_1_deterministic = {
+                "status": "COURT_ADMISSIBLE",
+                "verdict": tron_res["assessment"]["verdict_badge"],
+                "confirmed_vasps": tron_res["attributed_vasps"],
+                "statutory_freezes_recommended": [
+                    v for v in tron_res["attributed_vasps"] if v.get("statutory_action")
+                ],
+                "total_seizure_quantum_usd": tron_res["seizure_quantum"]["total_usd"],
+                "total_seizure_quantum_inr": tron_res["seizure_quantum"]["total_inr"],
+                "court_evidence_ledger": tron_res["raw_evidence_records"],
+                "section_65b_ready": len(tron_res["raw_evidence_records"]) > 0
+            }
+            track_2_probabilistic = {
+                "status": "ADVISORY_INTELLIGENCE",
+                "ai_suspicion_score": int(tron_res["assessment"]["confidence_score"]),
+                "ai_confidence_tier": tron_res["assessment"]["confidence_tier"],
+                "typologies_detected": [{"typology": "TRON_USDT_PEEL_CHAIN", "confidence": 0.85}],
+                "syndicate_clusters": tron_res["syndicate_clusters"],
+                "mixer_events": [],
+                "bridge_events": [],
+                "threat_actors": []
+            }
+            return {
+                "root_address": root_address,
+                "network": "tron-mainnet",
+                "max_depth_traversed": max_depth,
+                "execution_time_seconds": round(t_elapsed, 3),
+                "confidence_score": tron_res["assessment"]["confidence_score"],
+                "confidence_tier": tron_res["assessment"]["confidence_tier"],
+                "verdict_badge": tron_res["assessment"]["verdict_badge"],
+                "total_seizure_quantum_usd": tron_res["seizure_quantum"]["total_usd"],
+                "total_seizure_quantum_inr": tron_res["seizure_quantum"]["total_inr"],
+                "attributed_vasps": tron_res["attributed_vasps"],
+                "mixer_events": [],
+                "bridge_events": [],
+                "threat_actors_detected": [],
+                "syndicate_clusters": tron_res["syndicate_clusters"],
+                "typologies_detected": track_2_probabilistic["typologies_detected"],
+                "ai_advisory": {
+                    "suspicion_score": int(tron_res["assessment"]["confidence_score"]),
+                    "confidence_tier": tron_res["assessment"]["confidence_tier"]
+                },
+                "track_1_deterministic": track_1_deterministic,
+                "track_2_probabilistic": track_2_probabilistic,
+                "graph": {
+                    "nodes": list(tron_res["nodes"].values()),
+                    "edges": tron_res["edges"]
+                },
+                "evidence_ledger": tron_res["raw_evidence_records"]
+            }
+
         # Parse crime timestamp if provided
         crime_epoch = 0.0
         if crime_timestamp:

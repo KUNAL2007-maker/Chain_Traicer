@@ -92,7 +92,7 @@ def run_trace(
     if network not in SUPPORTED_NETWORKS:
         network = "eth-mainnet"
     try:
-        max_depth = max(1, min(8, int(max_depth)))
+        max_depth = max(1, min(10, int(max_depth)))
     except (TypeError, ValueError):
         max_depth = 4
     try:

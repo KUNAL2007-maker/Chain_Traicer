@@ -84,6 +84,16 @@ SUPPORTED_NETWORKS = {
         "explorer": "https://mempool.space",
         "type": "UTXO L1",
         "native_decimals": 8
+    },
+    "tron-mainnet": {
+        "id": "tron-mainnet",
+        "name": "TRON Mainnet",
+        "chain_id": 728126428,
+        "symbol": "TRX",
+        "trongrid_url": "https://api.trongrid.io",
+        "explorer": "https://tronscan.org",
+        "type": "TRC-20 L1",
+        "native_decimals": 6
     }
 }
 
@@ -854,6 +864,37 @@ VERIFIED_VASP_REGISTRY_BTC = {
 
 # Merge Bitcoin VASPs into master VERIFIED_VASP_REGISTRY
 VERIFIED_VASP_REGISTRY.update(VERIFIED_VASP_REGISTRY_BTC)
+
+# -------------------------------------------------------------------------
+# 5b. Verified TRON (TRC-20) VASP Hot Wallets
+# TRON/USDT is the dominant stablecoin laundering rail. These are widely
+# documented exchange deposit/hot wallets on TRON; extend this registry with
+# any additional attributed T-addresses as intelligence is confirmed. Addresses
+# are stored in canonical base58 (T...) form, matched case-sensitively.
+# -------------------------------------------------------------------------
+VERIFIED_VASP_REGISTRY_TRON = {
+    # Binance — primary TRON hot wallet (very high USDT-TRC20 throughput)
+    "TWd4WrZ9wn84f5x1hZhL4DHvk738ns5jwb": {
+        "name": "Binance TRON Hot Wallet",
+        "entity": "Binance",
+        "type": "VASP_HOT_WALLET",
+        "email": "case-response@binance.com",
+        "fiu_registered": True,
+        "status": "VERIFIED"
+    },
+    # Binance — secondary settlement wallet
+    "TMuA6YqfCeX8EhbfYEg5y7S4DqzSJireY9": {
+        "name": "Binance TRON Settlement",
+        "entity": "Binance",
+        "type": "VASP_HOT_WALLET",
+        "email": "case-response@binance.com",
+        "fiu_registered": True,
+        "status": "VERIFIED"
+    },
+}
+
+# Merge TRON VASPs into master VERIFIED_VASP_REGISTRY
+VERIFIED_VASP_REGISTRY.update(VERIFIED_VASP_REGISTRY_TRON)
 
 # -------------------------------------------------------------------------
 # 6. KNOWN_INFRA Allowlist (FINAL_ALGORITHM.md §1.3)
