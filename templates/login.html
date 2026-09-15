@@ -5,18 +5,22 @@
    script, swapping the form action between /login and /signup. Requirement #3 —
    after a successful signup the server redirects here in login mode with an info
    banner, so sign-in is always explicit. #}
-<html lang="en" class="dark">
+<html lang="en" class="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#07090d" />
+  <meta name="theme-color" content="#f8fafc" />
   <title>Sign in · FinGuard Intelligence</title>
+  {# Theme flash guard — mirror base.html: a fresh session lands on the light
+     government console; only an explicit dark choice persists. #}
   <script>
     (function () {
       try {
         var t = sessionStorage.getItem('finguard-theme');
-        document.documentElement.classList.add(t === 'light' ? 'light' : 'dark');
-      } catch (e) { document.documentElement.classList.add('dark'); }
+        var cls = t === 'dark' ? 'dark' : 'light';
+        document.documentElement.classList.remove('light', 'dark');
+        document.documentElement.classList.add(cls);
+      } catch (e) { document.documentElement.classList.add('light'); }
     })();
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -38,18 +42,11 @@
   <div class="min-h-screen flex items-center justify-center px-4" style="background: var(--bg)">
     <div class="w-full max-w-md">
       <div class="flex items-center justify-center gap-3 mb-8">
-        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-700 grid place-items-center shadow-glow">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" stroke="#052e1a" stroke-width="1.6" stroke-linejoin="round" fill="rgba(255,255,255,0.15)" />
-            <path d="M9 12l2 2 4-4" stroke="#052e1a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </div>
+        <img src="/static/assets/trinetra_logo.svg" alt="" class="w-11 h-11 shrink-0" />
         <div>
-          <div class="text-xl font-semibold" style="color: var(--text-strong)">
-            FinGuard <span class="text-emerald-400">Intelligence</span>
-          </div>
+          <div class="text-xl font-extrabold tracking-wide" style="color: var(--text-strong)">FinGuard</div>
           <div class="text-[11px] uppercase tracking-widest" style="color: var(--muted-2)">
-            Transaction analysis console
+            Crypto Forensics Intelligence
           </div>
         </div>
       </div>
@@ -98,7 +95,7 @@
           </div>
 
           <button type="submit" data-submit
-            class="w-full rounded-xl border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 py-2.5 text-[14px] font-medium shadow-glow transition disabled:opacity-50">
+            class="btn btn-primary btn-action-full disabled:opacity-50">
             {{ "Sign in" if mode == "login" else "Create account" }}
           </button>
         </form>
