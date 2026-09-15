@@ -967,6 +967,183 @@
     return cat === "bridge" ? "Swap/Bridge" : cat === "vasp" ? "Cash-out" : cat === "mixer" ? "Mixer" : "Transfer";
   }
 
+  // ── Cross-chain: which coin/chain each hop sits on ───────────────────────────
+  var CHAIN_META = {
+    ethereum: { label: "Ethereum",    color: "#627eea", code: "ETH" },
+    bitcoin:  { label: "Bitcoin",     color: "#f7931a", code: "BTC" },
+    tron:     { label: "TRON",        color: "#eb0029", code: "TRX" },
+    bnb:      { label: "BNB Chain",   color: "#f0b90b", code: "BNB" },
+    polygon:  { label: "Polygon",     color: "#8247e5", code: "POL" },
+    arbitrum: { label: "Arbitrum",    color: "#28a0f0", code: "ARB" },
+    base:     { label: "Base",        color: "#0052ff", code: "BASE" },
+    multi:    { label: "Multi-chain", color: "#64748b", code: "MULTI" }
+  };
+  var NETWORK_CHAIN = {
+    "eth-mainnet": "ethereum", "bnb-mainnet": "bnb", "polygon-mainnet": "polygon",
+    "arb-mainnet": "arbitrum", "base-mainnet": "base", "btc-mainnet": "bitcoin", "tron-mainnet": "tron"
+  };
+  function chainKeyFromText(s) {
+    s = (s || "").toLowerCase();
+    if (/bitcoin|btc\b/.test(s)) return "bitcoin";
+    if (/tron|trc\b|trc-?20/.test(s)) return "tron";
+    if (/bnb|bsc|binance/.test(s)) return "bnb";
+    if (/polygon|matic/.test(s)) return "polygon";
+    if (/arbitrum|arb\b/.test(s)) return "arbitrum";
+    if (/base\b/.test(s)) return "base";
+    if (/multi[_ -]?chain|multichain/.test(s)) return "multi";
+    if (/ethereum|erc-?20|\beth\b/.test(s)) return "ethereum";
+    return null;
+  }
+  // A cross-chain mint / bridge destination in the node label wins; otherwise the
+  // trace's own network. This is what lets one diagram span ETH → TRON → BTC etc.
+  function traceChainOf(n, network) {
+    var t = (n.type || "").toUpperCase(), lbl = n.label || "";
+    if (/CROSS_CHAIN_MINT|MINT_RECIPIENT/.test(t)) {
+      var mm = /\(([^)]+)\)/.exec(lbl); var k = mm && chainKeyFromText(mm[1]); if (k) return k;
+    }
+    var arrow = />\s*([A-Za-z][\w -]+)/.exec(lbl); // "-> Polygon"
+    if (arrow) { var k2 = chainKeyFromText(arrow[1]); if (k2 && k2 !== "multi") return k2; }
+    return NETWORK_CHAIN[network] || "ethereum";
+  }
+
+  // ── Inline SVG node glyphs (single data-URI per node: entity icon + chain badge).
+  // Nodes render as a white disc + coloured ring (Cytoscape) with this glyph on
+  // top, so the graph reads like the reference (a bank = VASP, a bridge, a swirl =
+  // mixer, a warning = sanctioned) instead of anonymous boxes. ──────────────────
+  var ENTITY_GLYPH = {
+    subject:      '<circle cx="12" cy="12" r="8.5" fill="none" stroke="COL" stroke-width="2.2"/><circle cx="12" cy="12" r="3.2" fill="COL"/>',
+    intermediary: '<rect x="3" y="6.5" width="18" height="12" rx="2.2" fill="none" stroke="COL" stroke-width="2.2"/><rect x="13.5" y="11" width="7.5" height="4.6" rx="1.4" fill="COL"/>',
+    vasp:         '<path d="M3.5 9 12 3.8 20.5 9" fill="none" stroke="COL" stroke-width="2.2" stroke-linejoin="round"/><rect x="5" y="9.5" width="2.2" height="7.5" fill="COL"/><rect x="10.9" y="9.5" width="2.2" height="7.5" fill="COL"/><rect x="16.8" y="9.5" width="2.2" height="7.5" fill="COL"/><rect x="3.3" y="17.4" width="17.4" height="2.4" rx="0.6" fill="COL"/>',
+    bridge:       '<path d="M2.5 17.5h19" stroke="COL" stroke-width="2.2" stroke-linecap="round"/><path d="M7 17.5V8M17 17.5V8" stroke="COL" stroke-width="2.2"/><path d="M3 12.6c4.5-6 13.5-6 18 0" fill="none" stroke="COL" stroke-width="2.2"/>',
+    mixer:        '<circle cx="12" cy="12" r="8.6" fill="none" stroke="COL" stroke-width="2.2"/><path d="M12 5.6a6.4 6.4 0 0 1 0 12.8 4.2 4.2 0 0 1 0-8.4 2 2 0 0 0 0 4" fill="none" stroke="COL" stroke-width="1.9" stroke-linecap="round"/>',
+    sanctioned:   '<path d="M12 3.4 21.5 20H2.5Z" fill="none" stroke="COL" stroke-width="2.2" stroke-linejoin="round"/><rect x="10.9" y="8.8" width="2.2" height="6" rx="1" fill="COL"/><rect x="10.9" y="16" width="2.2" height="2.2" rx="1.1" fill="COL"/>',
+    cluster:      '<path d="M12 2.8 21 8l-9 5.2L3 8Z" fill="none" stroke="COL" stroke-width="2" stroke-linejoin="round"/><path d="M3 12.2l9 5.2 9-5.2" fill="none" stroke="COL" stroke-width="2" stroke-linejoin="round"/><path d="M3 16.2l9 5.2 9-5.2" fill="none" stroke="COL" stroke-width="2" stroke-linejoin="round"/>'
+  };
+  function nodeGlyphSvg(cat, chainKey) {
+    var col = (NODE_CAT[cat] || NODE_CAT.intermediary).color;
+    var glyph = (ENTITY_GLYPH[cat] || ENTITY_GLYPH.intermediary).replace(/COL/g, col);
+    var badge = "";
+    var cm = CHAIN_META[chainKey];
+    if (cm) {
+      var w = 9 + cm.code.length * 5.2;
+      badge = '<rect x="' + (48 - w - 1.5) + '" y="1.5" width="' + w + '" height="14" rx="7" fill="' + cm.color + '"/>' +
+        '<text x="' + (48 - w / 2 - 1.5) + '" y="11.4" font-family="Arial,Helvetica,sans-serif" font-size="9" font-weight="700" fill="#ffffff" text-anchor="middle">' + cm.code + '</text>';
+    }
+    // 24-unit glyph scaled ~1.15 and centred low, leaving the top-right for the badge.
+    var inner = '<g transform="translate(10.2,12.5) scale(1.15)">' + glyph + '</g>' + badge;
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">' + inner + '</svg>';
+    return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+  }
+
+  // ── Node-combining ("if there are many nodes, combine them"): collapse plain
+  // pass-through wallets into expandable super-nodes so the money trail stays
+  // legible. Named entities (VASP / mixer / bridge / sanctioned) and the subject
+  // are never merged. Three reducers: peel chains, parallel bundles, dead-ends. ──
+  function traceAdj(nodes, edges) {
+    var byId = {}, outN = {}, inN = {};
+    nodes.forEach(function (n) { byId[n.id] = n; outN[n.id] = []; inN[n.id] = []; });
+    edges.forEach(function (e) { if (byId[e.source] && byId[e.target]) { outN[e.source].push(e.target); inN[e.target].push(e.source); } });
+    return { byId: byId, outN: outN, inN: inN };
+  }
+  function traceAssignClusters(nodes, edges, expanded) {
+    var adj = traceAdj(nodes, edges), byId = adj.byId, outN = adj.outN, inN = adj.inN;
+    expanded = expanded || {};
+    function isPlain(n) { return n && traceCategoryOf(n) === "intermediary" && (n.hop_distance || 0) !== 0; }
+    var memberOf = {}, clusters = {};
+    function claim(ids, kind) {
+      if (ids.length < 2) return;
+      var cid = "cluster:" + kind + ":" + ids.slice().sort().join(",");
+      if (expanded[cid]) return;
+      if (ids.some(function (id) { return memberOf[id]; })) return;
+      ids.forEach(function (id) { memberOf[id] = cid; });
+      clusters[cid] = { id: cid, kind: kind, members: ids.slice() };
+    }
+    // (a) Peel chains — maximal linear runs of plain deg-(1,1) wallets.
+    var seen = {};
+    nodes.forEach(function (n) {
+      if (!isPlain(n) || seen[n.id] || inN[n.id].length !== 1 || outN[n.id].length !== 1) return;
+      var start = n.id;
+      while (true) { var p = inN[start][0]; if (p && isPlain(byId[p]) && inN[p].length === 1 && outN[p].length === 1) start = p; else break; }
+      var run = [], cur = start;
+      while (cur && isPlain(byId[cur]) && inN[cur].length === 1 && outN[cur].length === 1 && !seen[cur]) { run.push(cur); seen[cur] = 1; cur = outN[cur][0]; }
+      claim(run, "peel");
+    });
+    // (b) Parallel bundles & (c) dead-end bundles hanging off one parent.
+    nodes.forEach(function (p) {
+      var leaves = [], parallels = {};
+      (outN[p.id] || []).forEach(function (k) {
+        if (memberOf[k] || !isPlain(byId[k]) || inN[k].length !== 1) return;
+        var o = outN[k];
+        if (o.length === 0) leaves.push(k);
+        else if (o.length === 1) { (parallels[o[0]] = parallels[o[0]] || []).push(k); }
+      });
+      if (leaves.length >= 3) claim(leaves, "dormant");
+      Object.keys(parallels).forEach(function (s) { if (parallels[s].length >= 3) claim(parallels[s], "parallel"); });
+    });
+    return { memberOf: memberOf, clusters: clusters };
+  }
+  // Build the DISPLAY graph (raw graph → collapsed nodes/edges with aggregation).
+  function traceDisplayGraph(g, network, combine, expanded) {
+    var nodes = g.nodes || [], edges = g.edges || [];
+    var memberOf = {}, clusters = {};
+    if (combine) { var a = traceAssignClusters(nodes, edges, expanded); memberOf = a.memberOf; clusters = a.clusters; }
+    var byId = {}; nodes.forEach(function (n) { byId[n.id] = n; });
+    function disp(id) { return memberOf[id] || id; }
+    Object.keys(clusters).forEach(function (cid) {
+      var c = clusters[cid], mem = c.members.map(function (id) { return byId[id]; }).filter(Boolean);
+      c.count = mem.length;
+      c.hop_distance = Math.min.apply(null, mem.map(function (m) { return m.hop_distance || 0; }));
+      c.valuation_usd = mem.reduce(function (s, m) { return s + Number(m.valuation_usd || 0); }, 0);
+      c.valuation_inr = mem.reduce(function (s, m) { return s + Number(m.valuation_inr || 0); }, 0);
+      c.taint_ratio = Math.max.apply(null, mem.map(function (m) { return Number(m.taint_ratio || 0); }));
+      c.chainKey = traceChainOf(mem[0] || {}, network);
+      c.name = c.kind === "peel" ? ("Peel chain · " + mem.length + " hops")
+        : c.kind === "parallel" ? (mem.length + " pass-through wallets")
+        : (mem.length + " dormant wallets");
+    });
+    var dnodes = [], emitted = {};
+    nodes.forEach(function (n) {
+      var d = disp(n.id);
+      if (d === n.id) {
+        var cat = traceCategoryOf(n);
+        dnodes.push({ id: n.id, cluster: false, category: cat, raw: n, name: traceNodeName(n),
+          hop_distance: n.hop_distance || 0, chainKey: traceChainOf(n, network), taint_ratio: Number(n.taint_ratio || 0) });
+      } else if (!emitted[d]) {
+        emitted[d] = true; var c = clusters[d];
+        dnodes.push({ id: c.id, cluster: true, category: "cluster", members: c.members, count: c.count,
+          name: c.name, kind: c.kind, hop_distance: c.hop_distance, chainKey: c.chainKey,
+          taint_ratio: c.taint_ratio, valuation_usd: c.valuation_usd, valuation_inr: c.valuation_inr });
+      }
+    });
+    var emap = {};
+    edges.forEach(function (e) {
+      var s = disp(e.source), t = disp(e.target); if (s === t) return;
+      var key = s + "→" + t, agg = emap[key] || (emap[key] = { source: s, target: t, value: 0, value_usd: 0, count: 0, taint: 0, assets: {}, sampleTs: 0, sampleTx: "" });
+      agg.value += Number(e.value || 0); agg.value_usd += Number(e.value_usd || 0); agg.count += 1;
+      agg.taint = Math.max(agg.taint, Number(e.taint_ratio || 0));
+      if (e.asset) agg.assets[e.asset] = (agg.assets[e.asset] || 0) + Number(e.value || 0);
+      if (!agg.sampleTs && e.timestamp) { agg.sampleTs = e.timestamp; agg.sampleTx = e.tx_hash; }
+    });
+    var dInDeg = {}; Object.keys(emap).forEach(function (k) { dInDeg[emap[k].target] = (dInDeg[emap[k].target] || 0) + 1; });
+    var dById = {}; dnodes.forEach(function (d) { dById[d.id] = d; });
+    var dedges = Object.keys(emap).map(function (k) {
+      var a = emap[k], tgt = dById[a.target] || {}, src = dById[a.source] || {};
+      var assets = Object.keys(a.assets).sort(function (x, y) { return a.assets[y] - a.assets[x]; });
+      var primaryAsset = assets[0] || "";
+      var type;
+      if (tgt.category === "vasp" && (dInDeg[a.target] || 0) >= 2) type = "Consolidation";
+      else if (src.cluster || tgt.cluster) type = "Peeling";
+      else if (tgt.category === "bridge") type = "Swap/Bridge";
+      else if (tgt.category === "mixer") type = "Mixer in";
+      else type = "Direct Transfer";
+      var label = assets.length > 1 ? traceUsd(a.value_usd) : traceAmt(a.value, primaryAsset);
+      if (a.count > 1) label += "  (" + a.count + "×)";
+      return { id: k, source: a.source, target: a.target, type: type, label: label,
+        value: a.value, value_usd: a.value_usd, primaryAsset: primaryAsset, count: a.count, taint: a.taint };
+    });
+    return { nodes: dnodes, edges: dedges };
+  }
+
   function classifyWalletAddress(v) {
     v = (v || "").trim();
     if (!v) return null;
@@ -990,9 +1167,13 @@
 
     // Investigation state, shared across the renderers + toolbar bindings below.
     var cy = null;               // current Cytoscape instance (destroyed on re-run)
-    var lastGraph = null;        // { nodes, edges, byId, network }
+    var lastGraph = null;        // { nodes, edges, byId, network }  (RAW — timeline/flow read this)
     var traceNetwork = "eth-mainnet";
     var lastExport = null;       // payload for the "Export graph (JSON)" button
+    var currentGraph = null;     // raw trace_result.graph, kept so we can rebuild on combine/expand
+    var combineOn = false;       // node-combining toggle (auto-enabled for large graphs)
+    var expandedClusters = {};   // clusterId -> true : clusters the user tapped open
+    var COMBINE_THRESHOLD = 16;  // auto-combine above this many raw nodes
 
     // Show which chain the pasted address routes to. The network is derived from
     // the address shape alone — there is no coin picker.
@@ -1044,76 +1225,88 @@
     }
     function copyText(t) { try { navigator.clipboard.writeText(t); showToast("Address copied"); } catch (e) {} }
 
-    // Build Cytoscape elements + a preset (hierarchical) layout from hop_distance.
+    // Build Cytoscape elements from the DISPLAY graph (raw → collapsed via the
+    // combine algorithm), laid out left→right by hop distance. Nodes carry a
+    // composited icon (entity glyph + chain badge) so the flow reads at a glance.
     function buildElements(g) {
       var byId = {};
       (g.nodes || []).forEach(function (n) { byId[n.id] = n; });
+      var dg = traceDisplayGraph(g, traceNetwork, combineOn, expandedClusters);
       var buckets = {};
-      (g.nodes || []).forEach(function (n) { var h = n.hop_distance || 0; (buckets[h] = buckets[h] || []).push(n); });
-      var colGap = 240, rowGap = 92, baseY = 300, els = [];
+      dg.nodes.forEach(function (n) { var h = n.hop_distance || 0; (buckets[h] = buckets[h] || []).push(n); });
+      var colGap = 260, rowGap = 108, baseY = 300, els = [];
       Object.keys(buckets).forEach(function (h) {
         var arr = buckets[h], m = arr.length;
         arr.forEach(function (n, i) {
-          var cat = traceCategoryOf(n);
-          var size = cat === "subject" ? 60 : (cat === "intermediary" ? 40 : 48);
+          var cat = n.category;
+          var size = cat === "subject" ? 64 : n.cluster ? 58 : (cat === "intermediary" ? 46 : 54);
+          var sub = n.cluster ? (n.count + " wallets — tap to expand") : traceShortAddr(n.id);
+          var cm = CHAIN_META[n.chainKey] || {};
           els.push({
             data: {
-              id: n.id, name: traceNodeName(n), category: cat, color: catColor(cat), size: size,
-              isRoot: (n.hop_distance || 0) === 0 ? 1 : 0,
-              chain: NETWORK_LABEL[traceNetwork] || traceNetwork, raw: n
+              id: n.id, name: n.name, sub: sub, category: cat, color: catColor(cat), size: size,
+              icon: nodeGlyphSvg(cat, n.chainKey), label2: n.name + "\n" + sub,
+              isRoot: cat === "subject" ? 1 : 0, isCluster: n.cluster ? 1 : 0,
+              chainKey: n.chainKey || "", chainLabel: cm.label || "",
+              raw: n.raw || null, disp: n
             },
             position: { x: 90 + Number(h) * colGap, y: baseY + (i - (m - 1) / 2) * rowGap }
           });
         });
       });
-      (g.edges || []).forEach(function (e) {
-        if (!byId[e.source] || !byId[e.target]) return;
-        var risk = traceRisk(e.taint_ratio);
-        var type = traceEdgeType(byId, e);
+      dg.edges.forEach(function (e) {
         els.push({
           data: {
-            id: e.id || (e.source + "->" + e.target), source: e.source, target: e.target,
-            label: traceAmt(e.value, e.asset), type: type,
-            color: risk.color === "#22c55e" ? "#94a3b8" : risk.color,
-            width: (e.taint_ratio || 0) >= 0.66 ? 2.6 : 1.5,
-            chain: NETWORK_LABEL[traceNetwork] || traceNetwork, raw: e
+            id: e.id, source: e.source, target: e.target,
+            label: e.label, type: e.type, dedge: e
           }
         });
       });
-      return { els: els, byId: byId };
+      return { els: els, byId: byId, display: dg };
     }
 
     // Cytoscape stylesheet, resolved against the live CSS theme variables so the
-    // graph matches light/dark like the rest of the console.
+    // graph matches light/dark. Nodes are white discs with a coloured ring + an
+    // entity/chain glyph on top; edges are coloured & labelled by flow type.
     function cyStyle() {
       var css = getComputedStyle(document.documentElement);
       function v(name, fb) { var x = (css.getPropertyValue(name) || "").trim(); return x || fb; }
-      var textCol = v("--text", "#0f172a"), panelCol = v("--panel", "#ffffff"),
-          bgCol = v("--bg", "#f8fafc"), mutedCol = v("--muted", "#64748b");
+      var textCol = v("--text-strong", "#0f172a"), subCol = v("--muted", "#64748b"),
+          panelCol = v("--panel", "#ffffff"), bgCol = v("--bg", "#f8fafc");
       return [
         { selector: "node", style: {
-          "background-color": "data(color)", "background-opacity": 0.18,
-          "border-color": "data(color)", "border-width": 2.4,
-          "width": "data(size)", "height": "data(size)", "shape": "round-rectangle",
-          "label": "data(name)", "font-size": 10, "font-family": "JetBrains Mono, monospace",
-          "color": textCol, "text-valign": "bottom", "text-margin-y": 6,
-          "text-max-width": 130, "text-wrap": "wrap",
-          "text-outline-color": panelCol, "text-outline-width": 2.5
+          "shape": "ellipse",
+          "background-color": panelCol, "background-opacity": 1,
+          "background-image": "data(icon)", "background-fit": "none",
+          "background-width": "100%", "background-height": "100%",
+          "background-clip": "none",
+          "background-position-x": "50%", "background-position-y": "50%",
+          "border-color": "data(color)", "border-width": 2.6,
+          "width": "data(size)", "height": "data(size)",
+          "label": "data(label2)", "font-size": 9.5, "font-family": "Inter, system-ui, sans-serif",
+          "color": textCol, "text-valign": "bottom", "text-margin-y": 7,
+          "text-max-width": 160, "text-wrap": "wrap", "line-height": 1.28,
+          "text-outline-color": panelCol, "text-outline-width": 3
         } },
-        { selector: "node[isRoot = 1]", style: { "border-width": 3.6, "background-opacity": 0.3, "font-weight": "bold", "font-size": 11 } },
-        { selector: "node:selected", style: { "border-width": 4.5, "background-opacity": 0.34 } },
-        { selector: "node.faded", style: { "opacity": 0.12 } },
-        { selector: "node.match", style: { "border-color": "#38bdf8", "border-width": 4.5 } },
+        { selector: "node[isRoot = 1]", style: { "border-width": 3.8, "font-weight": "bold" } },
+        { selector: "node[isCluster = 1]", style: { "border-style": "double", "border-width": 4.5 } },
+        { selector: "node:selected", style: { "border-width": 5, "overlay-color": "data(color)", "overlay-opacity": 0.12, "overlay-padding": 5 } },
+        { selector: "node.faded", style: { "opacity": 0.16 } },
+        { selector: "node.match", style: { "border-color": "#38bdf8", "border-width": 5.5 } },
         { selector: "edge", style: {
-          "width": "data(width)", "line-color": "data(color)",
-          "target-arrow-color": "data(color)", "target-arrow-shape": "triangle",
-          "curve-style": "bezier", "arrow-scale": 1.1,
+          "width": 2, "line-color": "#94a3b8",
+          "target-arrow-color": "#94a3b8", "target-arrow-shape": "triangle",
+          "curve-style": "bezier", "arrow-scale": 1.2,
           "label": "data(label)", "font-size": 9, "font-family": "JetBrains Mono, monospace",
-          "color": mutedCol, "text-background-color": bgCol, "text-background-opacity": 0.92,
-          "text-background-padding": 2, "text-rotation": "autorotate"
+          "color": subCol, "text-background-color": bgCol, "text-background-opacity": 0.95,
+          "text-background-padding": 3, "text-background-shape": "roundrectangle", "text-rotation": "autorotate"
         } },
-        { selector: 'edge[type = "Swap/Bridge"]', style: { "line-style": "dashed", "line-color": "#3b82f6", "target-arrow-color": "#3b82f6" } },
-        { selector: "edge.faded", style: { "opacity": 0.07, "text-opacity": 0 } }
+        { selector: 'edge[type = "Swap/Bridge"]', style: { "line-color": "#3b82f6", "target-arrow-color": "#3b82f6" } },
+        { selector: 'edge[type = "Mixer in"]', style: { "line-color": "#eab308", "target-arrow-color": "#eab308" } },
+        { selector: 'edge[type = "Consolidation"]', style: { "line-color": "#0ea5e9", "target-arrow-color": "#0ea5e9", "width": 3.2 } },
+        { selector: 'edge[type = "Peeling"]', style: { "line-color": "#3b82f6", "target-arrow-color": "#3b82f6", "line-style": "dashed" } },
+        { selector: "edge:selected", style: { "width": 3.4 } },
+        { selector: "edge.faded", style: { "opacity": 0.06, "text-opacity": 0 } }
       ];
     }
 
@@ -1121,7 +1314,7 @@
       if (!cy) return;
       if (name === "hierarchical") {
         cy.nodes().forEach(function (nd) { var p = nd.scratch("_pos"); if (p) nd.position(p); });
-        cy.fit(undefined, 40); return;
+        fitGraph(); return;
       }
       var opts = { name: name, animate: false, fit: true, padding: 40 };
       if (name === "breadthfirst") {
@@ -1129,7 +1322,7 @@
         var roots = cy.nodes("[isRoot = 1]"); if (roots.length) opts.roots = roots;
       }
       if (name === "concentric") {
-        opts.concentric = function (n) { return 10 - (n.data("raw").hop_distance || 0); };
+        opts.concentric = function (n) { var d = n.data("disp") || {}; return 10 - (d.hop_distance || 0); };
         opts.levelWidth = function () { return 2; };
       }
       cy.layout(opts).run();
@@ -1139,9 +1332,24 @@
       var el = qs("[data-inv-overview]", root); if (!el || !cy) return;
       el.textContent = cy.nodes().length + " nodes · " + cy.edges().length + " edges · " + Math.round(cy.zoom() * 100) + "%";
     }
+    // Fit, but never zoom so far out that nodes become unreadable: wide left→right
+    // traces would otherwise shrink to ~20%. Below a floor we clamp the zoom and
+    // pan the subject to just right of the legend, so the money trail starts
+    // visible and the investigator pans right to follow it.
+    function fitGraph() {
+      if (!cy) return;
+      cy.fit(undefined, 46);
+      if (cy.zoom() < 0.62) {
+        cy.zoom(0.62);
+        var r = cy.nodes("[isRoot = 1]");
+        if (r.length) { var z = cy.zoom(), p = r.position(); cy.pan({ x: 250 - p.x * z, y: cy.height() / 2 - p.y * z }); }
+      }
+      updateOverview();
+    }
     function clearHighlight() { if (cy) cy.elements().removeClass("faded match"); }
 
     function buildGraph(g) {
+      currentGraph = g;
       var wrap = qs("[data-inv-cy]", root); if (!wrap) return;
       var emptyEl = qs("[data-inv-cy-empty]", root);
       if (typeof cytoscape === "undefined") {
@@ -1153,20 +1361,42 @@
       if (cy) { try { cy.destroy(); } catch (e) {} cy = null; }
       cy = cytoscape({
         container: wrap, elements: built.els, style: cyStyle(),
-        layout: { name: "preset" }, wheelSensitivity: 0.2, minZoom: 0.15, maxZoom: 3
+        layout: { name: "preset" }, wheelSensitivity: 0.2, minZoom: 0.12, maxZoom: 3
       });
       // Stash preset positions so the "Hierarchical" layout option can restore them.
       cy.nodes().forEach(function (nd) { nd.scratch("_pos", { x: nd.position("x"), y: nd.position("y") }); });
-      cy.fit(undefined, 40);
+      fitGraph();
       if (emptyEl) emptyEl.style.display = built.els.length ? "none" : "grid";
       updateOverview();
-      cy.on("tap", "node", function (evt) { showNodeDetails(evt.target); });
+      // Tap a super-node to expand it; tap a real node for its dossier.
+      cy.on("tap", "node", function (evt) {
+        var nd = evt.target;
+        if (nd.data("isCluster")) { expandCluster(nd.id()); return; }
+        showNodeDetails(nd);
+      });
       cy.on("tap", function (evt) { if (evt.target === cy) { clearHighlight(); resetDetails(); } });
       cy.on("zoom pan", updateOverview);
     }
 
+    // Rebuild from the stored raw graph (after toggling combine or expanding a
+    // cluster) without re-hitting the network.
+    function rebuildGraph() { if (currentGraph) buildGraph(currentGraph); }
+    function expandCluster(cid) {
+      expandedClusters[cid] = true;
+      rebuildGraph();
+      showToast("Cluster expanded");
+    }
+    function syncCombineBtn() {
+      var btn = qs("[data-inv-combine]", root); if (!btn) return;
+      btn.setAttribute("aria-pressed", combineOn ? "true" : "false");
+      btn.textContent = combineOn ? "◧ Combined" : "◧ Combine nodes";
+      btn.style.background = combineOn ? "var(--accent-weak)" : "var(--chip)";
+      btn.style.color = combineOn ? "var(--accent-2)" : "var(--text)";
+    }
+
     function showNodeDetails(node) {
       var panel = qs("[data-inv-details]", root); if (!panel || !cy) return;
+      if (node.data("isCluster")) { expandCluster(node.id()); return; }  // safety: super-nodes expand
       var n = node.data("raw"), cat = node.data("category"), col = node.data("color"), addr = n.id;
       var inUsd = 0, outUsd = 0, inCt = 0, outCt = 0, times = [];
       (lastGraph.edges || []).forEach(function (e) {
@@ -1308,13 +1538,14 @@
 
     function populateChainFilter(g) {
       var sel = qs("[data-inv-chain]", root); if (!sel) return;
-      var chains = {}; chains[NETWORK_LABEL[traceNetwork] || traceNetwork] = true;
+      var chains = {};
       (g.nodes || []).forEach(function (n) {
-        var mm = /MINT[^(]*\(([^)]+)\)|->\s*([A-Za-z][\w ]+)/.exec(n.label || "");
-        if (mm) { var c = (mm[1] || mm[2] || "").trim(); if (c && c.toUpperCase() !== "MULTI_CHAIN") chains[c] = true; }
+        var k = traceChainOf(n, traceNetwork), cm = CHAIN_META[k];
+        if (cm) chains[cm.label] = true;
       });
-      sel.innerHTML = '<option value="__all__">All chains</option>' +
-        Object.keys(chains).map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join("");
+      var labels = Object.keys(chains);
+      sel.innerHTML = '<option value="__all__">All chains' + (labels.length > 1 ? " (" + labels.length + ")" : "") + "</option>" +
+        labels.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + "</option>"; }).join("");
     }
 
     function setKpi(k, val) { var el = qs('[data-inv-kpi="' + k + '"]', root); if (el) el.textContent = String(val); }
@@ -1328,7 +1559,7 @@
       qsa("[data-inv-pane]", root).forEach(function (p) {
         if (p.getAttribute("data-inv-pane") === key) show(p); else hide(p);
       });
-      if (key === "graph" && cy) setTimeout(function () { cy.resize(); cy.fit(undefined, 40); }, 30);
+      if (key === "graph" && cy) setTimeout(function () { cy.resize(); fitGraph(); }, 30);
     }
 
     function renderInvestigation(data) {
@@ -1356,6 +1587,12 @@
       setKpi("exec", tr.execution_time_seconds != null ? tr.execution_time_seconds + "s" : "—");
 
       lastExport = { trace_result: tr, verdict: data.verdict, neo4j: data.neo4j };
+
+      // Auto-combine large graphs so the trail stays legible; reset any prior
+      // expand state, then reflect it on the toolbar toggle.
+      expandedClusters = {};
+      combineOn = (g.nodes || []).length > COMBINE_THRESHOLD;
+      syncCombineBtn();
 
       buildGraph(g);
       renderTimeline(g.edges || []);
@@ -1405,7 +1642,7 @@
 
     // ── Investigation toolbar / tabs (bound once; act on the live `cy`) ──
     qsa("[data-inv-tab]", root).forEach(function (b) { on(b, "click", function () { switchTab(b.getAttribute("data-inv-tab")); }); });
-    on(qs("[data-inv-fit]", root), "click", function () { if (cy) cy.fit(undefined, 40); });
+    on(qs("[data-inv-fit]", root), "click", function () { fitGraph(); });
     qsa("[data-inv-zoom]", root).forEach(function (b) {
       on(b, "click", function () {
         if (!cy) return;
@@ -1415,12 +1652,18 @@
       });
     });
     on(qs("[data-inv-layout]", root), "change", function () { runLayout(this.value); });
+    on(qs("[data-inv-combine]", root), "click", function () {
+      combineOn = !combineOn;
+      expandedClusters = {};
+      syncCombineBtn();
+      rebuildGraph();
+    });
     on(qs("[data-inv-chain]", root), "change", function () {
       if (!cy) return;
       var val = this.value;
       if (val === "__all__") { cy.elements().style("display", "element"); cy.fit(undefined, 40); return; }
-      cy.nodes().forEach(function (nd) { nd.style("display", nd.data("chain") === val ? "element" : "none"); });
-      cy.edges().forEach(function (ed) { ed.style("display", (ed.source().data("chain") === val && ed.target().data("chain") === val) ? "element" : "none"); });
+      cy.nodes().forEach(function (nd) { nd.style("display", nd.data("chainLabel") === val ? "element" : "none"); });
+      cy.edges().forEach(function (ed) { ed.style("display", (ed.source().visible() && ed.target().visible()) ? "element" : "none"); });
       cy.fit(undefined, 40);
     });
     on(qs("[data-inv-search]", root), "input", function () {

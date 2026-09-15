@@ -133,6 +133,7 @@
                 <option value="__all__">All chains</option>
               </select>
             </label>
+            <button type="button" data-inv-combine aria-pressed="false" class="h-8 rounded-lg border px-2.5 text-[12px] transition hover:bg-[var(--hover)]" style="border-color: var(--border); background: var(--chip); color: var(--text)" title="Combine many nodes into expandable clusters — tap a cluster to expand it">◧ Combine nodes</button>
             <button type="button" data-inv-fit class="h-8 rounded-lg border px-2.5 text-[12px] transition hover:bg-[var(--hover)]" style="border-color: var(--border); color: var(--text)" title="Fit graph">Fit</button>
             <button type="button" data-inv-fullscreen class="grid h-8 w-8 place-items-center rounded-lg border transition hover:bg-[var(--hover)]" style="border-color: var(--border); color: var(--text)" title="Fullscreen" aria-label="Fullscreen">⛶</button>
           </div>
@@ -152,11 +153,15 @@
                 <div class="flex items-center gap-2"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background: {{ color }}"></span><span style="color: var(--text)">{{ label }}</span></div>
                 {% endfor %}
               </div>
-              <div class="text-[10px] uppercase tracking-widest mt-2.5 mb-1.5" style="color: var(--muted)">Edge type</div>
+              <div class="text-[10px] uppercase tracking-widest mt-2.5 mb-1.5" style="color: var(--muted)">Money flow</div>
               <div class="space-y-1" style="color: var(--text)">
-                <div class="flex items-center gap-2"><span class="inline-block w-6 border-t" style="border-color: var(--muted)"></span>Direct transfer</div>
-                <div class="flex items-center gap-2"><span class="inline-block w-6 border-t border-dashed" style="border-color: #3b82f6"></span>Swap / Bridge</div>
-                <div class="flex items-center gap-2"><span class="inline-block w-6 border-t-2" style="border-color: #ef4444"></span>High taint</div>
+                <div class="flex items-center gap-2"><span class="inline-block w-6 border-t-2" style="border-color: #94a3b8"></span>Direct transfer</div>
+                <div class="flex items-center gap-2"><span class="inline-block w-6 border-t-2" style="border-color: #3b82f6"></span>Swap / Bridge</div>
+                <div class="flex items-center gap-2"><span class="inline-block w-6 border-t-2" style="border-color: #0ea5e9"></span>Consolidation (cash-out)</div>
+                <div class="flex items-center gap-2"><span class="inline-block w-6 border-t-2 border-dashed" style="border-color: #3b82f6"></span>Peeling / cluster</div>
+              </div>
+              <div class="mt-2.5 pt-2.5 border-t text-[10.5px] leading-snug" style="border-color: var(--border); color: var(--muted-2)">
+                Each node carries a chain badge (<span class="font-mono">ETH · BTC · TRX · BNB · POL · ARB · BASE</span>) showing which coin that hop moves on. Edge labels show the amount &amp; token.
               </div>
             </div>
 
