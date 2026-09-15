@@ -305,32 +305,16 @@ def graph_node(request: Request, node_id: str):
     )
 
 
-@app.get("/upload", response_class=HTMLResponse)
-def upload(request: Request):
+@app.get("/trace", response_class=HTMLResponse)
+def trace_page(request: Request):
+    """Chain Tracer — paste any wallet address (EVM / TRON / BTC) and the
+    on-chain forensic engine auto-routes it to the right network. Fully
+    client-driven: the page POSTs to /api/crypto-trace. No CSV import."""
     user, redirect = _require_user(request)
     if redirect:
         return redirect
-    uid = user["uid"]
-    tab = request.query_params.get("tab", "import")
-    ctx = _shell_ctx(request, user, "upload")
-    uploads = db.list_uploads(uid)
-    txs = db.list_transactions(uid)
-    ctx.update(
-        {
-            "tab": tab,
-            "ok": request.query_params.get("ok"),
-            "error": request.query_params.get("error"),
-            "added": request.query_params.get("added"),
-            "high": request.query_params.get("high"),
-            "uploads": uploads,
-            "txs": txs,
-            "history": webutil.upload_history(uploads, txs) if tab == "history" else None,
-            # Suspect wallet addresses extracted from imported data — the Upload
-            # tab converts these into the input for the on-chain trace engine.
-            "wallets": webutil.detect_wallet_addresses(txs),
-        }
-    )
-    return templates.TemplateResponse(request, "upload.html", ctx)
+    ctx = _shell_ctx(request, user, "trace")
+    return templates.TemplateResponse(request, "trace.html", ctx)
 
 
 @app.get("/chat", response_class=HTMLResponse)
@@ -452,47 +436,13 @@ async def api_crypto_trace(request: Request):
 
 
 # ── Mutations (Firestore writes → SQLite, all PRG) ─────────────────────────────
-@app.post("/upload")
-async def do_upload(request: Request, file: UploadFile = None):
-    uid = _current_uid(request)
-    if not uid:
-        return RedirectResponse("/login", status_code=303)
-    if file is None:
-        return RedirectResponse("/upload?error=No+file+selected.", status_code=303)
-    raw = await file.read()
-    text = raw.decode("utf-8-sig", "replace")
-    try:
-        rows, _warnings = webutil.parse_csv(text)
-    except webutil.CSVError as e:
-        from urllib.parse import quote_plus
-
-        return RedirectResponse(f"/upload?error={quote_plus(str(e))}", status_code=303)
-    if not rows:
-        return RedirectResponse("/upload?error=No+valid+rows+found+in+the+file.", status_code=303)
-
-    from .domain import classifyRisk
-
-    high = sum(1 for r in rows if classifyRisk(r["amount"], r.get("note")) == "high")
-    db.bulk_insert_transactions(uid, rows, file_name=file.filename or "upload.csv")
-    return RedirectResponse(f"/upload?ok=1&added={len(rows)}&high={high}", status_code=303)
-
-
 @app.post("/clear-all")
 def do_clear_all(request: Request):
     uid = _current_uid(request)
     if not uid:
         return RedirectResponse("/login", status_code=303)
     db.clear_all_data(uid)
-    return RedirectResponse("/upload", status_code=303)
-
-
-@app.post("/upload/delete")
-def do_delete_upload(request: Request, upload_id: str = Form(...)):
-    uid = _current_uid(request)
-    if not uid:
-        return RedirectResponse("/login", status_code=303)
-    db.delete_upload(uid, upload_id)
-    return RedirectResponse("/upload?tab=history", status_code=303)
+    return RedirectResponse("/", status_code=303)
 
 
 @app.post("/transactions/delete")

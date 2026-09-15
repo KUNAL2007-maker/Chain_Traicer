@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{# Chain Tracer — the only feature on this tab. Paste any wallet address and the
+   on-chain forensic engine (Hafiz's COREALGORITHM, vendored under app/forensic/)
+   auto-routes it to the right network by the address shape: EVM (0x…) → Ethereum,
+   TRON (T…) → TRON, Bitcoin (1/3/bc1…) → Bitcoin. There is no coin picker and no
+   CSV import — a single free-text address is the whole input. The page is fully
+   client-driven: app.js (initCryptoTrace) POSTs to /api/crypto-trace and renders
+   the textual verdict. The network graph is intentionally deferred. #}
+
+{% block content %}
+<div class="min-h-full">
+  <div class="mx-auto w-full max-w-[1760px] px-4 sm:px-5 2xl:px-8 py-4 sm:py-5">
+
+    <div class="max-w-3xl rounded-2xl p-4 sm:p-6 border" style="background: var(--panel); border-color: var(--border)"
+         data-trace-root data-trace-endpoint="/api/crypto-trace">
+
+      <div class="mb-4">
+        <div class="text-lg font-semibold" style="color: var(--text-strong)">Chain Tracer</div>
+        <div class="mt-1 text-[13px]" style="color: var(--muted-2)">
+          Paste any suspect wallet address. The forensic engine detects the chain from the
+          address itself and traces it on-chain — no coin selection needed.
+        </div>
+      </div>
+
+      {# Suspect wallet input — a single free-text field, any address. #}
+      <label class="text-[10.5px] uppercase tracking-widest" style="color: var(--muted)">Suspect wallet address</label>
+      <div class="mt-2 grid gap-2.5 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <input type="text" data-trace-address-input value=""
+               placeholder="0x… (Ethereum) · T… (TRON) · 1 / 3 / bc1… (Bitcoin)" spellcheck="false" autocomplete="off"
+               class="rounded-lg border px-3 py-2.5 text-[13px] font-mono" style="border-color: var(--border); background: var(--chip); color: var(--text)" />
+        <button type="button" data-trace-run class="btn btn-primary whitespace-nowrap">Run on-chain trace →</button>
+      </div>
+
+      {# Auto-detected chain — updated live by app.js as the address is typed. #}
+      <div data-trace-detected class="mt-2 text-[12px]" style="color: var(--muted-2)">
+        Enter an address and its chain is detected automatically.
+      </div>
+
+      {# Optional example addresses — clicking one fills the field above. #}
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <span class="text-[11px]" style="color: var(--muted)">Try:</span>
+        <button type="button" data-trace-example data-trace-address="0x28C6c06298d514Db089934071355E5743bf21d60"
+                class="rounded-lg border px-2.5 py-1 text-[11.5px] font-mono transition hover:bg-[var(--hover)]" style="border-color: var(--border); background: var(--chip); color: var(--text)">Ethereum 0x28C6…1d60</button>
+        <button type="button" data-trace-example data-trace-address="TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+                class="rounded-lg border px-2.5 py-1 text-[11.5px] font-mono transition hover:bg-[var(--hover)]" style="border-color: var(--border); background: var(--chip); color: var(--text)">TRON TR7N…Lj6t</button>
+        <button type="button" data-trace-example data-trace-address="1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+                class="rounded-lg border px-2.5 py-1 text-[11.5px] font-mono transition hover:bg-[var(--hover)]" style="border-color: var(--border); background: var(--chip); color: var(--text)">Bitcoin 1A1z…fNa</button>
+      </div>
+
+      {# Trace status + textual verdict. No network graph is rendered here — the
+         visualization is intentionally deferred pending further instruction. #}
+      <div data-trace-status hidden class="mt-4 rounded-lg border p-3 text-[12.5px]" style="border-color: var(--border); background: var(--chip); color: var(--text)"></div>
+      <div data-trace-result hidden class="mt-3"></div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

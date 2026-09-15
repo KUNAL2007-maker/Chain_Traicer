@@ -89,7 +89,7 @@
             {% endfor %}
             {% if reports | length == 0 %}
             <div class="p-6 text-center text-[13px]" style="color: var(--muted)">
-              No reports yet. Upload transactions first.
+              No reports yet.
             </div>
             {% endif %}
           </div>
@@ -100,8 +100,8 @@
           style="background: var(--panel); border-color: var(--border); color: var(--muted)">
           <div class="text-[11px] uppercase tracking-widest mb-1.5" style="color: var(--muted-2)">Live source</div>
           Every report on this page is written from your current
-          <span style="color: var(--text)">{{ txs | length }}</span> transactions. Upload more and the
-          wording, accounts and statutes update on their own.
+          <span style="color: var(--text)">{{ txs | length }}</span> transactions. As the data
+          changes, the wording, accounts and statutes update on their own.
         </div>
         {% endif %}
       </aside>
