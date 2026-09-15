@@ -27,23 +27,23 @@
       {{ metric_card(
           "Total Transactions", format_en_in(stats.total), sub="Across all accounts",
           accent="#38bdf8", spark=spark1,
-          icon='<span class="text-[11px]">◇</span>'|safe,
+          icon='<span class="text-[17px] leading-none">◇</span>'|safe,
           trend={"dir": "up", "text": "Live from database"}) }}
       {{ metric_card(
           "Flagged Amount", formatINR(stats.flaggedAmount), sub="High-risk total",
           accent="#22c55e", spark=spark2,
-          icon='<span class="text-[11px]">₹</span>'|safe,
+          icon='<span class="text-[17px] leading-none">₹</span>'|safe,
           trend={"dir": "up", "text": stats.high ~ " high-risk txns"}) }}
       {{ metric_card(
           "High-Risk Transfers", stats.high, sub="Flagged for review",
           accent="#ef4444", spark=spark3,
-          icon='<span class="text-[11px]">◉</span>'|safe,
+          icon='<span class="text-[17px] leading-none">◉</span>'|safe,
           trend={"dir": "up" if stats.high > 0 else "flat",
                  "text": (stats.high ~ " need review") if stats.high > 0 else "All clear"}) }}
       {{ metric_card(
           "Open Alerts", stats.openAlerts, sub="Active alerts",
           accent="#a78bfa", spark=spark4,
-          icon='<span class="text-[11px]">◈</span>'|safe,
+          icon='<span class="text-[17px] leading-none">◈</span>'|safe,
           trend={"dir": "up" if stats.openAlerts > 0 else "flat",
                  "text": (stats.openAlerts ~ " need attention") if stats.openAlerts > 0 else "All clear"}) }}
     </div>

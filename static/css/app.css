@@ -919,19 +919,26 @@ html.light .bg-finguard-bg { background-color: var(--bg) !important; }
 html.light .bg-finguard-panel\/70 { background-color: var(--panel-strong) !important; }
 html.light .bg-finguard-panel { background-color: var(--panel) !important; }
 
-/* Emerald → brand blue (the JS toggles these for active/live/filter states) */
+/* Emerald → brand blue. The app.js toggles these classes for active / live /
+   filter / primary-action states; TRINETRA renders those as brand blue. Solid
+   emerald dots/swatches (bg-emerald-400, bg-emerald-500/60) are intentionally
+   NOT remapped — they stay semantic green (live pulse, low-severity). */
 html.light .bg-emerald-500\/10 { background-color: rgba(37, 99, 235, 0.1) !important; }
 html.light .bg-emerald-500\/15 { background-color: rgba(37, 99, 235, 0.12) !important; }
+html.light .bg-emerald-500\/25 { background-color: rgba(37, 99, 235, 0.2) !important; }
+html.light .bg-emerald-500\/\[0\.06\] { background-color: rgba(37, 99, 235, 0.07) !important; }
+html.light .border-emerald-500\/20 { border-color: rgba(37, 99, 235, 0.24) !important; }
 html.light .border-emerald-500\/25 { border-color: rgba(37, 99, 235, 0.28) !important; }
 html.light .border-emerald-500\/30 { border-color: rgba(37, 99, 235, 0.32) !important; }
 html.light .border-emerald-500\/40 { border-color: rgba(37, 99, 235, 0.4) !important; }
+html.light .border-emerald-500 { border-color: #2563eb !important; }
+html.light .hover\:bg-emerald-500\/25:hover { background-color: rgba(37, 99, 235, 0.2) !important; }
 html.light .text-emerald-200 { color: #1d4ed8 !important; }
 html.light .text-emerald-300 { color: #1d4ed8 !important; }
 html.light .text-emerald-400 { color: #2563eb !important; }
-html.light .bg-emerald-400 { background-color: #2563eb !important; }
 html.light .from-emerald-400 { --tw-gradient-from: #38bdf8 var(--tw-gradient-from-position) !important; }
 html.light .to-emerald-700 { --tw-gradient-to: #0284c7 var(--tw-gradient-to-position) !important; }
-html.light .shadow-glow { box-shadow: 0 0 20px rgba(37, 99, 235, 0.2) !important; }
+html.light .shadow-glow { box-shadow: 0 0 20px rgba(37, 99, 235, 0.18) !important; }
 
 /* Text-slate readability under light */
 html.light .text-slate-200 { color: #1e293b; }
