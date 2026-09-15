@@ -1,28 +1,35 @@
 {% extends "base.html" %}
-{# Chain Tracer — the only feature on this tab. Paste any wallet address and the
-   on-chain forensic engine (Hafiz's COREALGORITHM, vendored under app/forensic/)
-   auto-routes it to the right network by the address shape: EVM (0x…) → Ethereum,
-   TRON (T…) → TRON, Bitcoin (1/3/bc1…) → Bitcoin. There is no coin picker and no
-   CSV import — a single free-text address is the whole input. The page is fully
-   client-driven: app.js (initCryptoTrace) POSTs to /api/crypto-trace and renders
-   the textual verdict. The network graph is intentionally deferred. #}
+{# Chain Tracer → Deep Investigation. Paste any wallet address and the on-chain
+   forensic engine (Hafiz's COREALGORITHM, vendored under app/forensic/) auto-routes
+   it by address shape: EVM (0x…) → Ethereum, TRON (T…) → TRON, Bitcoin (1/3/bc1…)
+   → Bitcoin. No coin picker, no CSV import — one free-text address is the input.
+
+   After a trace, app.js (initCryptoTrace) renders the result as an interactive
+   node-link investigation graph modelled on the TRINETRA "Deep Investigation" UI:
+   a typed/colour-coded Cytoscape canvas with a legend, node-details panel and a
+   transaction timeline. The graph is drawn client-side from trace_result.graph and
+   is additionally persisted to Neo4j when a store is configured (see graph_store).#}
+
+{% block head %}
+  {# Cytoscape.js — client-side network graph renderer. Pinned; only this page loads it. #}
+  <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+{% endblock %}
 
 {% block content %}
 <div class="min-h-full">
-  <div class="mx-auto w-full max-w-[1760px] px-4 sm:px-5 2xl:px-8 py-4 sm:py-5">
+  <div class="mx-auto w-full max-w-[1760px] px-4 sm:px-5 2xl:px-8 py-4 sm:py-5"
+       data-trace-root data-trace-endpoint="/api/crypto-trace">
 
-    <div class="max-w-3xl rounded-2xl p-4 sm:p-6 border" style="background: var(--panel); border-color: var(--border)"
-         data-trace-root data-trace-endpoint="/api/crypto-trace">
-
+    {# ── Input card — a single free-text address, chain auto-detected ── #}
+    <div class="max-w-3xl rounded-2xl p-4 sm:p-6 border" style="background: var(--panel); border-color: var(--border)">
       <div class="mb-4">
         <div class="text-lg font-semibold" style="color: var(--text-strong)">Chain Tracer</div>
         <div class="mt-1 text-[13px]" style="color: var(--muted-2)">
           Paste any suspect wallet address. The forensic engine detects the chain from the
-          address itself and traces it on-chain — no coin selection needed.
+          address itself and traces it on-chain — then maps the money trail as an interactive graph.
         </div>
       </div>
 
-      {# Suspect wallet input — a single free-text field, any address. #}
       <label class="text-[10.5px] uppercase tracking-widest" style="color: var(--muted)">Suspect wallet address</label>
       <div class="mt-2 grid gap-2.5 sm:grid-cols-[minmax(0,1fr)_auto]">
         <input type="text" data-trace-address-input value=""
@@ -31,12 +38,10 @@
         <button type="button" data-trace-run class="btn btn-primary whitespace-nowrap">Run on-chain trace →</button>
       </div>
 
-      {# Auto-detected chain — updated live by app.js as the address is typed. #}
       <div data-trace-detected class="mt-2 text-[12px]" style="color: var(--muted-2)">
         Enter an address and its chain is detected automatically.
       </div>
 
-      {# Optional example addresses — clicking one fills the field above. #}
       <div class="mt-3 flex flex-wrap items-center gap-2">
         <span class="text-[11px]" style="color: var(--muted)">Try:</span>
         <button type="button" data-trace-example data-trace-address="0x28C6c06298d514Db089934071355E5743bf21d60"
@@ -47,12 +52,185 @@
                 class="rounded-lg border px-2.5 py-1 text-[11.5px] font-mono transition hover:bg-[var(--hover)]" style="border-color: var(--border); background: var(--chip); color: var(--text)">Bitcoin 1A1z…fNa</button>
       </div>
 
-      {# Trace status + textual verdict. No network graph is rendered here — the
-         visualization is intentionally deferred pending further instruction. #}
       <div data-trace-status hidden class="mt-4 rounded-lg border p-3 text-[12.5px]" style="border-color: var(--border); background: var(--chip); color: var(--text)"></div>
-      <div data-trace-result hidden class="mt-3"></div>
     </div>
 
+    {# ══ Investigation region — revealed by app.js after a trace completes ══ #}
+    <div data-inv-region hidden class="mt-5 space-y-4">
+
+      {# ── Result header ── #}
+      <div class="rounded-2xl border p-4 sm:p-5" style="background: var(--panel); border-color: var(--border)">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div class="min-w-0">
+            <div class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Deep Investigation</div>
+            <div class="mt-1 flex items-center gap-2 flex-wrap">
+              <span data-inv-subject class="text-[15px] sm:text-[17px] font-semibold font-mono break-all" style="color: var(--text-strong)">—</span>
+              <button type="button" data-inv-copy-subject title="Copy address"
+                      class="grid h-6 w-6 place-items-center rounded-md border transition hover:bg-[var(--hover)]" style="border-color: var(--border); color: var(--muted)">⧉</button>
+            </div>
+            <div data-inv-meta class="mt-1.5 text-[12px] font-mono" style="color: var(--muted-2)">—</div>
+          </div>
+          <div class="flex flex-col items-end gap-2">
+            <div class="flex items-center gap-2 flex-wrap justify-end">
+              <span data-inv-verdict class="rounded-md px-2.5 py-1 text-[12px] font-semibold" style="background: var(--accent-weak); color: var(--accent-2)">—</span>
+              <span data-inv-neo4j class="rounded-md px-2 py-1 text-[11px] border" style="border-color: var(--border); color: var(--muted)" title="Neo4j graph store">◇ store</span>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap justify-end">
+              <button type="button" data-inv-export class="text-[11.5px] rounded-md border px-2.5 py-1.5 transition hover:bg-[var(--hover)]" style="border-color: var(--border); color: var(--text)">↑ Export graph (JSON)</button>
+              <a data-inv-report href="/sar" class="text-[11.5px] rounded-md border px-2.5 py-1.5 transition hover:bg-[var(--hover)]" style="border-color: var(--border); color: var(--text)">◈ Generate evidence report</a>
+            </div>
+          </div>
+        </div>
+
+        {# KPI strip #}
+        <div class="mt-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5">
+          {% for key, label in [
+              ("confidence", "Confidence"), ("seizure_usd", "Seizure quantum"),
+              ("hops", "Hops traversed"), ("vasps", "Attributed VASPs"),
+              ("evidence", "Evidence sealed"), ("exec", "Trace time")] %}
+          <div class="rounded-lg border px-3 py-2" style="border-color: var(--border); background: var(--chip)">
+            <div class="text-[10px] uppercase tracking-widest" style="color: var(--muted)">{{ label }}</div>
+            <div data-inv-kpi="{{ key }}" class="mt-0.5 text-[13px] font-semibold font-mono truncate" style="color: var(--text)">—</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      {# ── Tabs ── #}
+      <div class="flex items-center gap-1 border-b" style="border-color: var(--border)">
+        {% for key, label in [("graph", "Graph View"), ("flow", "Transaction Flow"), ("attr", "Attribution Analysis")] %}
+        <button type="button" data-inv-tab="{{ key }}"
+                class="relative px-3.5 py-2.5 text-[13px] font-medium transition"
+                style="color: var(--muted-2)">{{ label }}</button>
+        {% endfor %}
+      </div>
+
+      {# ── Pane: Graph View ── #}
+      <div data-inv-pane="graph" class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px]">
+
+        {# Graph canvas card #}
+        <div class="rounded-2xl border overflow-hidden" style="background: var(--panel); border-color: var(--border)">
+          {# Toolbar #}
+          <div class="flex flex-wrap items-center gap-2 px-3 py-2.5 border-b" style="border-color: var(--border)">
+            <div class="relative flex-1 min-w-[180px]">
+              <svg class="absolute left-2.5 top-1/2 -translate-y-1/2" width="13" height="13" viewBox="0 0 24 24" fill="none" style="color: var(--muted-2)">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              <input type="text" data-inv-search placeholder="Search in graph (address, label)…"
+                     class="h-8 w-full rounded-lg border pl-8 pr-2 text-[12px] outline-none" style="background: var(--chip); border-color: var(--border); color: var(--text)" />
+            </div>
+            <label class="flex items-center gap-1.5 text-[11px]" style="color: var(--muted)">Layout
+              <select data-inv-layout class="h-8 rounded-lg border px-2 text-[12px] outline-none" style="background: var(--chip); border-color: var(--border); color: var(--text)">
+                <option value="hierarchical">Hierarchical</option>
+                <option value="breadthfirst">Breadthfirst</option>
+                <option value="concentric">Concentric</option>
+                <option value="grid">Grid</option>
+                <option value="circle">Circle</option>
+              </select>
+            </label>
+            <label class="flex items-center gap-1.5 text-[11px]" style="color: var(--muted)">Chain
+              <select data-inv-chain class="h-8 rounded-lg border px-2 text-[12px] outline-none" style="background: var(--chip); border-color: var(--border); color: var(--text)">
+                <option value="__all__">All chains</option>
+              </select>
+            </label>
+            <button type="button" data-inv-fit class="h-8 rounded-lg border px-2.5 text-[12px] transition hover:bg-[var(--hover)]" style="border-color: var(--border); color: var(--text)" title="Fit graph">Fit</button>
+            <button type="button" data-inv-fullscreen class="grid h-8 w-8 place-items-center rounded-lg border transition hover:bg-[var(--hover)]" style="border-color: var(--border); color: var(--text)" title="Fullscreen" aria-label="Fullscreen">⛶</button>
+          </div>
+
+          {# Canvas + overlays #}
+          <div data-inv-canvas-wrap class="relative" style="height: 600px; background: var(--bg)">
+            <div data-inv-cy class="absolute inset-0"></div>
+
+            {# Legend (top-left) #}
+            <div class="absolute left-3 top-3 rounded-xl border p-3 text-[11px] shadow-lg" style="background: var(--panel); border-color: var(--border); max-width: 200px">
+              <div class="text-[10px] uppercase tracking-widest mb-1.5" style="color: var(--muted)">Node type</div>
+              <div class="space-y-1">
+                {% for color, label in [
+                    ("#ef4444","Subject / Victim"), ("#a78bfa","Intermediate wallet"),
+                    ("#3b82f6","DEX / Bridge"), ("#22c55e","Exchange (VASP)"),
+                    ("#eab308","Mixer / Privacy"), ("#ec4899","Sanctioned / Threat")] %}
+                <div class="flex items-center gap-2"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background: {{ color }}"></span><span style="color: var(--text)">{{ label }}</span></div>
+                {% endfor %}
+              </div>
+              <div class="text-[10px] uppercase tracking-widest mt-2.5 mb-1.5" style="color: var(--muted)">Edge type</div>
+              <div class="space-y-1" style="color: var(--text)">
+                <div class="flex items-center gap-2"><span class="inline-block w-6 border-t" style="border-color: var(--muted)"></span>Direct transfer</div>
+                <div class="flex items-center gap-2"><span class="inline-block w-6 border-t border-dashed" style="border-color: #3b82f6"></span>Swap / Bridge</div>
+                <div class="flex items-center gap-2"><span class="inline-block w-6 border-t-2" style="border-color: #ef4444"></span>High taint</div>
+              </div>
+            </div>
+
+            {# Zoom controls (bottom-left) #}
+            <div class="absolute left-3 bottom-3 flex flex-col overflow-hidden rounded-lg border" style="border-color: var(--border); background: var(--panel)">
+              <button type="button" data-inv-zoom="in" class="grid h-8 w-8 place-items-center text-[16px] transition hover:bg-[var(--hover)]" style="color: var(--text)" aria-label="Zoom in">+</button>
+              <div class="h-px" style="background: var(--border)"></div>
+              <button type="button" data-inv-zoom="out" class="grid h-8 w-8 place-items-center text-[16px] transition hover:bg-[var(--hover)]" style="color: var(--text)" aria-label="Zoom out">−</button>
+            </div>
+
+            {# Overview label (bottom-right) #}
+            <div data-inv-overview class="absolute right-3 bottom-3 rounded-md border px-2 py-1 text-[10.5px] font-mono pointer-events-none" style="border-color: var(--border); background: var(--panel); color: var(--muted)">—</div>
+
+            {# Empty hint (before nodes exist) #}
+            <div data-inv-cy-empty class="absolute inset-0 grid place-items-center text-[12.5px]" style="color: var(--muted-2)">Building graph…</div>
+          </div>
+
+          {# Transaction Timeline (bottom of Graph View, as in the reference) #}
+          <div class="border-t" style="border-color: var(--border)">
+            <div class="flex items-center justify-between px-4 py-2.5">
+              <div class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Transaction timeline</div>
+              <div class="text-[11px] font-mono" style="color: var(--muted)"><span data-inv-tl-count>0</span> transactions</div>
+            </div>
+            <div class="max-h-[280px] overflow-auto">
+              <table class="custom-table">
+                <thead class="sticky top-0 z-10">
+                  <tr><th>#</th><th>Tx hash</th><th>From</th><th>To</th><th class="text-right">Amount</th><th>Token</th><th>Chain</th><th>Time (IST)</th><th>Type</th><th>Risk</th></tr>
+                </thead>
+                <tbody data-inv-timeline></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {# Node details panel #}
+        <aside data-inv-details class="rounded-2xl border p-4 lg:sticky lg:top-4 lg:self-start" style="background: var(--panel); border-color: var(--border)">
+          <div class="grid place-items-center py-16 text-center text-[12.5px]" style="color: var(--muted-2)">
+            <div class="text-[26px] mb-2 opacity-40">◉</div>
+            Click any node in the graph to inspect the wallet, its taint and attribution basis.
+          </div>
+        </aside>
+      </div>
+
+      {# ── Pane: Transaction Flow ── #}
+      <div data-inv-pane="flow" hidden class="rounded-2xl border overflow-hidden" style="background: var(--panel); border-color: var(--border)">
+        <div class="flex flex-wrap items-center gap-3 px-4 py-3 border-b" style="border-color: var(--border)">
+          <div class="text-[11px] uppercase tracking-widest" style="color: var(--muted)">Transaction flow ledger</div>
+          <input type="text" data-inv-flow-search placeholder="Filter by address, hash, token…"
+                 class="h-8 flex-1 min-w-[220px] rounded-lg border px-3 text-[12px] outline-none" style="background: var(--chip); border-color: var(--border); color: var(--text)" />
+          <div class="text-[11px] font-mono" style="color: var(--muted)"><span data-inv-flow-count>0</span> hops</div>
+        </div>
+        <div class="max-h-[560px] overflow-auto">
+          <table class="custom-table">
+            <thead class="sticky top-0 z-10">
+              <tr><th>#</th><th>Tx hash</th><th>From</th><th>To</th><th class="text-right">Amount</th><th class="text-right">USD</th><th>Token</th><th>Chain</th><th>Hop</th><th>Time (IST)</th><th>Type</th><th>Taint</th></tr>
+            </thead>
+            <tbody data-inv-flow></tbody>
+          </table>
+        </div>
+      </div>
+
+      {# ── Pane: Attribution Analysis ── #}
+      <div data-inv-pane="attr" hidden class="grid gap-4 lg:grid-cols-2">
+        <div class="rounded-2xl border p-4" style="background: var(--panel); border-color: var(--border)">
+          <div class="text-[11px] uppercase tracking-widest mb-3" style="color: var(--muted)">Attributed exchanges (VASPs)</div>
+          <div data-inv-attr-vasps class="space-y-2"></div>
+        </div>
+        <div class="rounded-2xl border p-4" style="background: var(--panel); border-color: var(--border)">
+          <div class="text-[11px] uppercase tracking-widest mb-3" style="color: var(--muted)">Typologies &amp; risk events</div>
+          <div data-inv-attr-events class="space-y-2"></div>
+        </div>
+      </div>
+
+    </div>
   </div>
 </div>
 {% endblock %}

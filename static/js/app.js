@@ -892,12 +892,80 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // On-chain wallet trace — the Upload tab converts a CSV into the suspect wallet
-  // address, then feeds it to the forensic engine (POST /api/crypto-trace). This
-  // renders the textual court dossier only; the network graph is deferred.
+  // On-chain wallet trace → interactive "Deep Investigation" graph. A single
+  // pasted address is auto-routed to its chain and traced by the forensic engine
+  // (POST /api/crypto-trace); app.js renders the returned trace_result.graph as a
+  // typed, colour-coded Cytoscape network with a node-details panel and a
+  // transaction timeline, modelled on the TRINETRA reference UI.
   // ═══════════════════════════════════════════════════════════════════════════
   var TRACE_NET = { EVM: "eth-mainnet", TRON: "tron-mainnet", BTC: "btc-mainnet" };
   var TRACE_NET_LABEL = { EVM: "Ethereum", TRON: "TRON", BTC: "Bitcoin" };
+
+  var NETWORK_LABEL = {
+    "eth-mainnet": "Ethereum", "bnb-mainnet": "BNB Chain", "polygon-mainnet": "Polygon",
+    "arb-mainnet": "Arbitrum", "base-mainnet": "Base", "btc-mainnet": "Bitcoin", "tron-mainnet": "TRON"
+  };
+  // Node categories → legend colours (match the reference legend exactly).
+  var NODE_CAT = {
+    subject:      { color: "#ef4444", label: "Subject / Victim", icon: "🎯" },
+    intermediary: { color: "#a78bfa", label: "Intermediate wallet", icon: "👛" },
+    bridge:       { color: "#3b82f6", label: "DEX / Bridge", icon: "🌉" },
+    vasp:         { color: "#22c55e", label: "Exchange (VASP)", icon: "🏦" },
+    mixer:        { color: "#eab308", label: "Mixer / Privacy", icon: "🌀" },
+    sanctioned:   { color: "#ec4899", label: "Sanctioned / Threat", icon: "⚠" }
+  };
+  function traceCategoryOf(n) {
+    var t = (n.type || "").toUpperCase();
+    if ((n.hop_distance || 0) === 0) return "subject";
+    if (/SANCTION|THREAT|NATION_STATE/.test(t)) return "sanctioned";
+    if (/MIXER/.test(t)) return "mixer";
+    if (/BRIDGE|DEX|CROSS_CHAIN/.test(t)) return "bridge";
+    if (/VASP/.test(t)) return "vasp";
+    return "intermediary";
+  }
+  function traceShortAddr(a) { a = a || ""; return a.length > 16 ? a.slice(0, 8) + "…" + a.slice(-6) : a; }
+  function traceNodeName(n) {
+    if ((n.hop_distance || 0) === 0) return "Subject wallet";
+    var first = (n.label || "").split("\n")[0].trim();
+    var stripped = first.replace(/^(VASP|MIXER|BRIDGE|THREAT|UNMASKED EXIT|CROSS[- ]CHAIN MINT|Infra|Intermediary|BURNER|Inflow Feeder|Gas Parent|CASHOUT)\b\s*[:>\-]*\s*/i, "").trim();
+    if (stripped && !/^0x/i.test(stripped) && stripped.indexOf("…") === -1 && stripped.indexOf("...") === -1) return stripped;
+    return traceShortAddr(n.id);
+  }
+  function traceExplorerAddr(network, addr) {
+    if (network === "btc-mainnet") return "https://mempool.space/address/" + addr;
+    if (network === "tron-mainnet") return "https://tronscan.org/#/address/" + addr;
+    var m = { "eth-mainnet": "https://etherscan.io", "bnb-mainnet": "https://bscscan.com", "polygon-mainnet": "https://polygonscan.com", "arb-mainnet": "https://arbiscan.io", "base-mainnet": "https://basescan.org" };
+    return (m[network] || "https://etherscan.io") + "/address/" + addr;
+  }
+  function traceExplorerTx(network, hash) {
+    if (!hash) return null;
+    if (network === "btc-mainnet") return "https://mempool.space/tx/" + hash;
+    if (network === "tron-mainnet") return "https://tronscan.org/#/transaction/" + hash;
+    var m = { "eth-mainnet": "https://etherscan.io", "bnb-mainnet": "https://bscscan.com", "polygon-mainnet": "https://polygonscan.com", "arb-mainnet": "https://arbiscan.io", "base-mainnet": "https://basescan.org" };
+    return (m[network] || "https://etherscan.io") + "/tx/" + hash;
+  }
+  function traceAmt(v, asset) {
+    v = Number(v || 0);
+    var s = v.toLocaleString("en-US", { maximumFractionDigits: v >= 1 ? 2 : 6 });
+    return s + (asset ? " " + asset : "");
+  }
+  function traceUsd(v) { try { return "$" + Number(v || 0).toLocaleString("en-US", { maximumFractionDigits: 0 }); } catch (e) { return "$" + (v || 0); } }
+  function traceInr(v) { try { return "₹" + Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 }); } catch (e) { return "₹" + (v || 0); } }
+  function traceIST(ts) {
+    ts = Number(ts || 0); if (!ts) return "—";
+    try { return new Date(ts * 1000).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
+    catch (e) { return "—"; }
+  }
+  function traceRisk(taint) {
+    taint = Number(taint || 0);
+    if (taint >= 0.66) return { label: "High", color: "#ef4444" };
+    if (taint >= 0.33) return { label: "Medium", color: "#f59e0b" };
+    return { label: "Low", color: "#22c55e" };
+  }
+  function traceEdgeType(byId, e) {
+    var tgt = byId[e.target] || {}; var cat = traceCategoryOf(tgt);
+    return cat === "bridge" ? "Swap/Bridge" : cat === "vasp" ? "Cash-out" : cat === "mixer" ? "Mixer" : "Transfer";
+  }
 
   function classifyWalletAddress(v) {
     v = (v || "").trim();
@@ -918,7 +986,13 @@
     var detectedEl = qs("[data-trace-detected]", root);
     var runBtn = qs("[data-trace-run]", root);
     var statusEl = qs("[data-trace-status]", root);
-    var resultEl = qs("[data-trace-result]", root);
+    var region = qs("[data-inv-region]", root);
+
+    // Investigation state, shared across the renderers + toolbar bindings below.
+    var cy = null;               // current Cytoscape instance (destroyed on re-run)
+    var lastGraph = null;        // { nodes, edges, byId, network }
+    var traceNetwork = "eth-mainnet";
+    var lastExport = null;       // payload for the "Export graph (JSON)" button
 
     // Show which chain the pasted address routes to. The network is derived from
     // the address shape alone — there is no coin picker.
@@ -960,37 +1034,338 @@
       catch (e) { return (cur === "usd" ? "$" : "₹") + (n || 0); }
     }
 
-    function renderVerdict(data) {
-      var tr = data.trace_result || {};
-      var v = data.verdict || {};
-      var cert = data.section_63_certificate || {};
-      var g = tr.graph || {};
-      var vasps = tr.attributed_vasps || [];
-      var primary = vasps[0] ? (vasps[0].vasp_name || vasps[0].name || "—") : "None";
-      var badge = tr.verdict_badge || v.verdict_badge || "TRACE COMPLETE";
-      var conf = (tr.confidence_score != null ? tr.confidence_score + "%" : "") + (tr.confidence_tier ? " · " + tr.confidence_tier : "");
-      var story = v.plain_english_story || "";
-      var tiles = [
-        ["Network", tr.network || "—"],
-        ["Graph", ((g.nodes || []).length) + " nodes · " + ((g.edges || []).length) + " edges"],
-        ["Seizure quantum", fmt(tr.total_seizure_quantum_usd, "usd") + " · " + fmt(tr.total_seizure_quantum_inr)],
-        ["Primary VASP", primary],
-        ["Evidence sealed", ((tr.evidence_ledger || []).length) + " payloads"],
-        ["Section 63 SHA-256", cert.master_evidence_hash || "—"]
+    function catColor(cat) { return (NODE_CAT[cat] || NODE_CAT.intermediary).color; }
+    function catIcon(cat) { return (NODE_CAT[cat] || NODE_CAT.intermediary).icon; }
+    function prettyStatus(s) { return String(s || "").replace(/_/g, " ").toLowerCase().replace(/^./, function (c) { return c.toUpperCase(); }); }
+    function detailRow(k, v) {
+      return '<div class="mt-2.5 flex items-center justify-between gap-2 text-[12px]">' +
+        '<span style="color: var(--muted)">' + esc(k) + '</span>' +
+        '<span class="font-mono text-right" style="color: var(--text)">' + esc(String(v)) + '</span></div>';
+    }
+    function copyText(t) { try { navigator.clipboard.writeText(t); showToast("Address copied"); } catch (e) {} }
+
+    // Build Cytoscape elements + a preset (hierarchical) layout from hop_distance.
+    function buildElements(g) {
+      var byId = {};
+      (g.nodes || []).forEach(function (n) { byId[n.id] = n; });
+      var buckets = {};
+      (g.nodes || []).forEach(function (n) { var h = n.hop_distance || 0; (buckets[h] = buckets[h] || []).push(n); });
+      var colGap = 240, rowGap = 92, baseY = 300, els = [];
+      Object.keys(buckets).forEach(function (h) {
+        var arr = buckets[h], m = arr.length;
+        arr.forEach(function (n, i) {
+          var cat = traceCategoryOf(n);
+          var size = cat === "subject" ? 60 : (cat === "intermediary" ? 40 : 48);
+          els.push({
+            data: {
+              id: n.id, name: traceNodeName(n), category: cat, color: catColor(cat), size: size,
+              isRoot: (n.hop_distance || 0) === 0 ? 1 : 0,
+              chain: NETWORK_LABEL[traceNetwork] || traceNetwork, raw: n
+            },
+            position: { x: 90 + Number(h) * colGap, y: baseY + (i - (m - 1) / 2) * rowGap }
+          });
+        });
+      });
+      (g.edges || []).forEach(function (e) {
+        if (!byId[e.source] || !byId[e.target]) return;
+        var risk = traceRisk(e.taint_ratio);
+        var type = traceEdgeType(byId, e);
+        els.push({
+          data: {
+            id: e.id || (e.source + "->" + e.target), source: e.source, target: e.target,
+            label: traceAmt(e.value, e.asset), type: type,
+            color: risk.color === "#22c55e" ? "#94a3b8" : risk.color,
+            width: (e.taint_ratio || 0) >= 0.66 ? 2.6 : 1.5,
+            chain: NETWORK_LABEL[traceNetwork] || traceNetwork, raw: e
+          }
+        });
+      });
+      return { els: els, byId: byId };
+    }
+
+    // Cytoscape stylesheet, resolved against the live CSS theme variables so the
+    // graph matches light/dark like the rest of the console.
+    function cyStyle() {
+      var css = getComputedStyle(document.documentElement);
+      function v(name, fb) { var x = (css.getPropertyValue(name) || "").trim(); return x || fb; }
+      var textCol = v("--text", "#0f172a"), panelCol = v("--panel", "#ffffff"),
+          bgCol = v("--bg", "#f8fafc"), mutedCol = v("--muted", "#64748b");
+      return [
+        { selector: "node", style: {
+          "background-color": "data(color)", "background-opacity": 0.18,
+          "border-color": "data(color)", "border-width": 2.4,
+          "width": "data(size)", "height": "data(size)", "shape": "round-rectangle",
+          "label": "data(name)", "font-size": 10, "font-family": "JetBrains Mono, monospace",
+          "color": textCol, "text-valign": "bottom", "text-margin-y": 6,
+          "text-max-width": 130, "text-wrap": "wrap",
+          "text-outline-color": panelCol, "text-outline-width": 2.5
+        } },
+        { selector: "node[isRoot = 1]", style: { "border-width": 3.6, "background-opacity": 0.3, "font-weight": "bold", "font-size": 11 } },
+        { selector: "node:selected", style: { "border-width": 4.5, "background-opacity": 0.34 } },
+        { selector: "node.faded", style: { "opacity": 0.12 } },
+        { selector: "node.match", style: { "border-color": "#38bdf8", "border-width": 4.5 } },
+        { selector: "edge", style: {
+          "width": "data(width)", "line-color": "data(color)",
+          "target-arrow-color": "data(color)", "target-arrow-shape": "triangle",
+          "curve-style": "bezier", "arrow-scale": 1.1,
+          "label": "data(label)", "font-size": 9, "font-family": "JetBrains Mono, monospace",
+          "color": mutedCol, "text-background-color": bgCol, "text-background-opacity": 0.92,
+          "text-background-padding": 2, "text-rotation": "autorotate"
+        } },
+        { selector: 'edge[type = "Swap/Bridge"]', style: { "line-style": "dashed", "line-color": "#3b82f6", "target-arrow-color": "#3b82f6" } },
+        { selector: "edge.faded", style: { "opacity": 0.07, "text-opacity": 0 } }
       ];
-      var html = '<div class="rounded-lg border p-4" style="border-color: var(--border); background: var(--chip)">' +
-        '<div class="flex items-center gap-2 flex-wrap">' +
-        '<span class="rounded px-2 py-0.5 text-[11px] font-semibold" style="background: var(--accent-weak); color: var(--accent-2)">' + esc(badge) + '</span>' +
-        (conf ? '<span class="text-[11.5px]" style="color: var(--muted-2)">' + esc(conf) + '</span>' : '') + '</div>' +
-        (story ? '<p class="mt-2 text-[12.5px]" style="color: var(--text)">' + esc(story) + '</p>' : '') +
-        '<div class="mt-3 grid gap-2 sm:grid-cols-2">' +
-        tiles.map(function (t) {
-          return '<div class="rounded-lg border px-3 py-2" style="border-color: var(--border); background: var(--panel)">' +
-            '<div class="text-[10px] uppercase tracking-widest" style="color: var(--muted)">' + esc(t[0]) + '</div>' +
-            '<div class="mt-0.5 text-[12px] font-mono break-all" style="color: var(--text)">' + esc(String(t[1])) + '</div></div>';
-        }).join("") + '</div>' +
-        '<div class="mt-3 text-[11px]" style="color: var(--muted-2)">Network-graph visualization is pending — it will be built on your instruction.</div></div>';
-      if (resultEl) { resultEl.innerHTML = html; show(resultEl); }
+    }
+
+    function runLayout(name) {
+      if (!cy) return;
+      if (name === "hierarchical") {
+        cy.nodes().forEach(function (nd) { var p = nd.scratch("_pos"); if (p) nd.position(p); });
+        cy.fit(undefined, 40); return;
+      }
+      var opts = { name: name, animate: false, fit: true, padding: 40 };
+      if (name === "breadthfirst") {
+        opts.directed = true; opts.spacingFactor = 1.1;
+        var roots = cy.nodes("[isRoot = 1]"); if (roots.length) opts.roots = roots;
+      }
+      if (name === "concentric") {
+        opts.concentric = function (n) { return 10 - (n.data("raw").hop_distance || 0); };
+        opts.levelWidth = function () { return 2; };
+      }
+      cy.layout(opts).run();
+    }
+
+    function updateOverview() {
+      var el = qs("[data-inv-overview]", root); if (!el || !cy) return;
+      el.textContent = cy.nodes().length + " nodes · " + cy.edges().length + " edges · " + Math.round(cy.zoom() * 100) + "%";
+    }
+    function clearHighlight() { if (cy) cy.elements().removeClass("faded match"); }
+
+    function buildGraph(g) {
+      var wrap = qs("[data-inv-cy]", root); if (!wrap) return;
+      var emptyEl = qs("[data-inv-cy-empty]", root);
+      if (typeof cytoscape === "undefined") {
+        if (emptyEl) { emptyEl.style.display = "grid"; emptyEl.textContent = "Graph library failed to load — check your connection and retry."; }
+        return;
+      }
+      var built = buildElements(g);
+      lastGraph = { nodes: g.nodes || [], edges: g.edges || [], byId: built.byId, network: traceNetwork };
+      if (cy) { try { cy.destroy(); } catch (e) {} cy = null; }
+      cy = cytoscape({
+        container: wrap, elements: built.els, style: cyStyle(),
+        layout: { name: "preset" }, wheelSensitivity: 0.2, minZoom: 0.15, maxZoom: 3
+      });
+      // Stash preset positions so the "Hierarchical" layout option can restore them.
+      cy.nodes().forEach(function (nd) { nd.scratch("_pos", { x: nd.position("x"), y: nd.position("y") }); });
+      cy.fit(undefined, 40);
+      if (emptyEl) emptyEl.style.display = built.els.length ? "none" : "grid";
+      updateOverview();
+      cy.on("tap", "node", function (evt) { showNodeDetails(evt.target); });
+      cy.on("tap", function (evt) { if (evt.target === cy) { clearHighlight(); resetDetails(); } });
+      cy.on("zoom pan", updateOverview);
+    }
+
+    function showNodeDetails(node) {
+      var panel = qs("[data-inv-details]", root); if (!panel || !cy) return;
+      var n = node.data("raw"), cat = node.data("category"), col = node.data("color"), addr = n.id;
+      var inUsd = 0, outUsd = 0, inCt = 0, outCt = 0, times = [];
+      (lastGraph.edges || []).forEach(function (e) {
+        if (e.source === addr || e.target === addr) { if (e.timestamp) times.push(e.timestamp); }
+        if (e.target === addr) { inUsd += Number(e.value_usd || 0); inCt++; }
+        if (e.source === addr) { outUsd += Number(e.value_usd || 0); outCt++; }
+      });
+      var first = times.length ? Math.min.apply(null, times) : 0;
+      var last = times.length ? Math.max.apply(null, times) : 0;
+      var taintPct = Math.round((n.taint_ratio || 0) * 100);
+      var taintCol = taintPct >= 66 ? "#ef4444" : taintPct >= 33 ? "#f59e0b" : "#22c55e";
+      var catMeta = NODE_CAT[cat] || NODE_CAT.intermediary;
+
+      // Focus the neighbourhood of the tapped node.
+      cy.elements().addClass("faded");
+      node.removeClass("faded"); node.closedNeighborhood().removeClass("faded");
+      cy.$(":selected").unselect(); node.select();
+
+      var basis = [];
+      if (n.status) basis.push(prettyStatus(n.status));
+      basis.push("Node type: " + (n.type || "—"));
+      basis.push("Hop distance from subject: " + (n.hop_distance || 0));
+      if (cat === "vasp") basis.push("Consistent with an exchange deposit endpoint");
+      if (cat === "mixer") basis.push("Interacted with a mixer / privacy protocol");
+      if (cat === "bridge") basis.push("Routed value through a cross-chain bridge / DEX");
+      if (cat === "sanctioned") basis.push("Matches sanctioned / threat-actor intelligence");
+
+      var explorer = traceExplorerAddr(lastGraph.network, addr);
+      panel.innerHTML =
+        '<div class="flex items-center gap-3">' +
+          '<span class="grid h-11 w-11 place-items-center rounded-xl text-[18px]" style="background:' + col + '22; color:' + col + '">' + catIcon(cat) + '</span>' +
+          '<div class="min-w-0"><div class="text-[15px] font-semibold truncate" style="color: var(--text-strong)">' + esc(node.data("name")) + '</div>' +
+          '<div class="text-[11px]" style="color:' + col + '">' + esc(catMeta.label) + '</div></div>' +
+        '</div>' +
+        '<div class="mt-3 rounded-lg border p-2.5 flex items-center gap-2" style="border-color: var(--border); background: var(--chip)">' +
+          '<span class="flex-1 min-w-0 truncate font-mono text-[12px]" style="color: var(--text)">' + esc(addr) + '</span>' +
+          '<button type="button" data-inv-copy="' + esc(addr) + '" class="grid h-6 w-6 place-items-center rounded-md border" style="border-color: var(--border); color: var(--muted)" title="Copy address">⧉</button>' +
+        '</div>' +
+        detailRow("Chain", NETWORK_LABEL[lastGraph.network] || lastGraph.network) +
+        detailRow("First seen", traceIST(first)) +
+        detailRow("Last activity", traceIST(last)) +
+        detailRow("Total inflow", traceUsd(inUsd) + " · " + inCt + " tx") +
+        detailRow("Total outflow", traceUsd(outUsd) + " · " + outCt + " tx") +
+        detailRow("Valuation", traceUsd(n.valuation_usd) + " · " + traceInr(n.valuation_inr)) +
+        '<div class="mt-3"><div class="flex items-center justify-between text-[11px]"><span style="color: var(--muted)">Taint score</span>' +
+          '<span class="font-mono" style="color:' + taintCol + '">' + taintPct + '%</span></div>' +
+          '<div class="mt-1 h-1.5 rounded-full overflow-hidden" style="background: var(--border)"><div class="h-full" style="width:' + taintPct + '%; background:' + taintCol + '"></div></div></div>' +
+        '<div class="mt-3"><div class="text-[10px] uppercase tracking-widest mb-1.5" style="color: var(--muted)">Attribution basis</div>' +
+          '<div class="space-y-1">' + basis.map(function (b) { return '<div class="flex items-start gap-1.5 text-[12px]" style="color: var(--text)"><span style="color:#22c55e">✓</span><span>' + esc(b) + '</span></div>'; }).join("") + '</div></div>' +
+        '<div class="mt-4"><a href="' + esc(explorer) + '" target="_blank" rel="noopener" class="block text-center text-[12px] rounded-lg border px-3 py-2 transition hover:bg-[var(--hover)]" style="border-color: var(--border); color: var(--text)">Show in block explorer ↗</a></div>';
+      var cp = qs("[data-inv-copy]", panel);
+      if (cp) on(cp, "click", function () { copyText(cp.getAttribute("data-inv-copy")); });
+    }
+
+    function resetDetails() {
+      var panel = qs("[data-inv-details]", root); if (!panel) return;
+      panel.innerHTML = '<div class="grid place-items-center py-16 text-center text-[12.5px]" style="color: var(--muted-2)">' +
+        '<div class="text-[26px] mb-2 opacity-40">◉</div>Click any node in the graph to inspect the wallet, its taint and attribution basis.</div>';
+    }
+
+    function renderTimeline(edges) {
+      var body = qs("[data-inv-timeline]", root), cnt = qs("[data-inv-tl-count]", root);
+      if (cnt) cnt.textContent = edges.length;
+      if (!body) return;
+      var rows = edges.slice(0, 200).map(function (e, i) {
+        var risk = traceRisk(e.taint_ratio), type = traceEdgeType(lastGraph.byId, e);
+        var tx = traceExplorerTx(lastGraph.network, e.tx_hash);
+        return '<tr>' +
+          '<td class="font-mono" style="color: var(--muted)">' + (i + 1) + '</td>' +
+          '<td>' + (tx ? '<a href="' + esc(tx) + '" target="_blank" rel="noopener" class="link-hash">' + esc(traceShortAddr(e.tx_hash)) + '</a>' : '<span class="link-hash">' + esc(traceShortAddr(e.tx_hash || "—")) + '</span>') + '</td>' +
+          '<td class="font-mono text-[11.5px]">' + esc(traceShortAddr(e.source)) + '</td>' +
+          '<td class="font-mono text-[11.5px]">' + esc(traceShortAddr(e.target)) + '</td>' +
+          '<td class="text-right font-mono" style="color: var(--text-strong)">' + esc(traceAmt(e.value, "")) + '</td>' +
+          '<td>' + esc(e.asset || "—") + '</td>' +
+          '<td>' + esc(NETWORK_LABEL[lastGraph.network] || lastGraph.network) + '</td>' +
+          '<td class="font-mono text-[11.5px]" style="color: var(--muted)">' + esc(traceIST(e.timestamp)) + '</td>' +
+          '<td class="text-[11.5px]">' + esc(type) + '</td>' +
+          '<td><span class="rounded px-1.5 py-0.5 text-[10.5px] font-medium" style="background:' + risk.color + '22; color:' + risk.color + '">' + risk.label + '</span></td>' +
+        '</tr>';
+      }).join("");
+      body.innerHTML = rows || '<tr><td colspan="10" class="text-center py-6" style="color: var(--muted)">No transactions in this trace.</td></tr>';
+    }
+
+    function renderFlow(edges) {
+      var body = qs("[data-inv-flow]", root), cnt = qs("[data-inv-flow-count]", root);
+      if (cnt) cnt.textContent = edges.length;
+      if (!body) return;
+      body.innerHTML = edges.map(function (e, i) {
+        var type = traceEdgeType(lastGraph.byId, e);
+        var tx = traceExplorerTx(lastGraph.network, e.tx_hash);
+        var hay = ((e.tx_hash || "") + " " + (e.source || "") + " " + (e.target || "") + " " + (e.asset || "")).toLowerCase();
+        return '<tr data-flow-row data-flow-search="' + esc(hay) + '">' +
+          '<td class="font-mono" style="color: var(--muted)">' + (i + 1) + '</td>' +
+          '<td>' + (tx ? '<a href="' + esc(tx) + '" target="_blank" rel="noopener" class="link-hash">' + esc(traceShortAddr(e.tx_hash)) + '</a>' : '<span class="link-hash">' + esc(traceShortAddr(e.tx_hash || "—")) + '</span>') + '</td>' +
+          '<td class="font-mono text-[11.5px]">' + esc(traceShortAddr(e.source)) + '</td>' +
+          '<td class="font-mono text-[11.5px]">' + esc(traceShortAddr(e.target)) + '</td>' +
+          '<td class="text-right font-mono" style="color: var(--text-strong)">' + esc(traceAmt(e.value, "")) + '</td>' +
+          '<td class="text-right font-mono" style="color: var(--muted)">' + esc(traceUsd(e.value_usd)) + '</td>' +
+          '<td>' + esc(e.asset || "—") + '</td>' +
+          '<td>' + esc(NETWORK_LABEL[lastGraph.network] || lastGraph.network) + '</td>' +
+          '<td class="font-mono">' + (e.hop != null ? e.hop : "—") + '</td>' +
+          '<td class="font-mono text-[11.5px]" style="color: var(--muted)">' + esc(traceIST(e.timestamp)) + '</td>' +
+          '<td class="text-[11.5px]">' + esc(type) + '</td>' +
+          '<td class="font-mono">' + Math.round((e.taint_ratio || 0) * 100) + '%</td>' +
+        '</tr>';
+      }).join("") || '<tr><td colspan="12" class="text-center py-6" style="color: var(--muted)">No transactions.</td></tr>';
+    }
+
+    function renderAttribution(tr) {
+      var vwrap = qs("[data-inv-attr-vasps]", root), ewrap = qs("[data-inv-attr-events]", root);
+      if (vwrap) {
+        var vasps = tr.attributed_vasps || [];
+        vwrap.innerHTML = vasps.length ? vasps.map(function (v) {
+          var name = v.vasp_name || v.name || "Unknown VASP";
+          var conf = v.confidence != null ? Math.round(v.confidence * (v.confidence <= 1 ? 100 : 1)) + "%" : "";
+          return '<div class="rounded-lg border p-3" style="border-color: var(--border); background: var(--chip)">' +
+            '<div class="flex items-center justify-between gap-2"><span class="text-[13px] font-semibold" style="color: var(--text-strong)">' + esc(name) + '</span>' +
+            (conf ? '<span class="text-[11px] font-mono" style="color:#22c55e">' + esc(conf) + '</span>' : '') + '</div>' +
+            (v.entity ? '<div class="text-[11.5px] mt-0.5" style="color: var(--muted-2)">' + esc(v.entity) + '</div>' : '') +
+            (v.statutory_action ? '<div class="mt-1.5 inline-block rounded px-1.5 py-0.5 text-[10.5px]" style="background:#ef444422; color:#ef4444">' + esc(v.statutory_action) + '</div>' : '') +
+          '</div>';
+        }).join("") : '<div class="text-[12.5px]" style="color: var(--muted-2)">No exchange endpoints attributed in this trace.</div>';
+      }
+      if (ewrap) {
+        var items = [];
+        function name_of(x, fb) { return typeof x === "string" ? x : (x && (x.name || x.type || x.typology || x.mixer || x.bridge)) || fb; }
+        (tr.typologies_detected || []).forEach(function (t) { items.push(["Typology", name_of(t, "Typology"), "#a78bfa"]); });
+        (tr.mixer_events || []).forEach(function (m) { items.push(["Mixer", name_of(m, "Mixer interaction"), "#eab308"]); });
+        (tr.bridge_events || []).forEach(function (b) { items.push(["Bridge", name_of(b, "Cross-chain bridge"), "#3b82f6"]); });
+        (tr.threat_actors_detected || []).forEach(function (t) { items.push(["Threat actor", name_of(t, "Threat actor"), "#ec4899"]); });
+        ewrap.innerHTML = items.length ? items.map(function (it) {
+          return '<div class="flex items-center gap-2.5 rounded-lg border px-3 py-2" style="border-color: var(--border); background: var(--chip)">' +
+            '<span class="w-2 h-2 rounded-full" style="background:' + it[2] + '"></span>' +
+            '<span class="text-[10.5px] uppercase tracking-widest" style="color: var(--muted)">' + esc(it[0]) + '</span>' +
+            '<span class="text-[12.5px]" style="color: var(--text)">' + esc(it[1]) + '</span></div>';
+        }).join("") : '<div class="text-[12.5px]" style="color: var(--muted-2)">No typologies or risk events flagged.</div>';
+      }
+    }
+
+    function populateChainFilter(g) {
+      var sel = qs("[data-inv-chain]", root); if (!sel) return;
+      var chains = {}; chains[NETWORK_LABEL[traceNetwork] || traceNetwork] = true;
+      (g.nodes || []).forEach(function (n) {
+        var mm = /MINT[^(]*\(([^)]+)\)|->\s*([A-Za-z][\w ]+)/.exec(n.label || "");
+        if (mm) { var c = (mm[1] || mm[2] || "").trim(); if (c && c.toUpperCase() !== "MULTI_CHAIN") chains[c] = true; }
+      });
+      sel.innerHTML = '<option value="__all__">All chains</option>' +
+        Object.keys(chains).map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join("");
+    }
+
+    function setKpi(k, val) { var el = qs('[data-inv-kpi="' + k + '"]', root); if (el) el.textContent = String(val); }
+
+    function switchTab(key) {
+      qsa("[data-inv-tab]", root).forEach(function (b) {
+        var on_ = b.getAttribute("data-inv-tab") === key;
+        b.style.color = on_ ? "var(--accent-2)" : "var(--muted-2)";
+        b.style.borderBottom = on_ ? "2px solid var(--accent-2)" : "2px solid transparent";
+      });
+      qsa("[data-inv-pane]", root).forEach(function (p) {
+        if (p.getAttribute("data-inv-pane") === key) show(p); else hide(p);
+      });
+      if (key === "graph" && cy) setTimeout(function () { cy.resize(); cy.fit(undefined, 40); }, 30);
+    }
+
+    function renderInvestigation(data) {
+      var tr = data.trace_result || {}, g = tr.graph || {};
+      traceNetwork = tr.network || traceNetwork;
+      var subj = qs("[data-inv-subject]", root); if (subj) subj.textContent = tr.root_address || "—";
+      var meta = qs("[data-inv-meta]", root);
+      if (meta) meta.textContent = (NETWORK_LABEL[traceNetwork] || traceNetwork) + " · depth " +
+        (tr.max_depth_traversed != null ? tr.max_depth_traversed : "—") + " · " +
+        ((g.nodes || []).length) + " nodes · " + ((g.edges || []).length) + " edges";
+      var verdict = qs("[data-inv-verdict]", root); if (verdict) verdict.textContent = tr.verdict_badge || "TRACE COMPLETE";
+
+      var chip = qs("[data-inv-neo4j]", root);
+      if (chip) {
+        var ne = data.neo4j || {};
+        if (ne.enabled && ne.ok) { chip.textContent = "◉ Neo4j · " + (ne.nodes || 0) + " nodes"; chip.style.color = "#22c55e"; chip.title = "Persisted to Neo4j graph store"; }
+        else { chip.textContent = "◇ Neo4j · off"; chip.style.color = "var(--muted)"; chip.title = ne.reason || "Graph store not configured"; }
+      }
+
+      setKpi("confidence", (tr.confidence_score != null ? tr.confidence_score + "%" : "—") + (tr.confidence_tier ? " · " + tr.confidence_tier : ""));
+      setKpi("seizure_usd", traceUsd(tr.total_seizure_quantum_usd));
+      setKpi("hops", tr.max_depth_traversed != null ? tr.max_depth_traversed : "—");
+      setKpi("vasps", (tr.attributed_vasps || []).length);
+      setKpi("evidence", (tr.evidence_ledger || []).length + " sealed");
+      setKpi("exec", tr.execution_time_seconds != null ? tr.execution_time_seconds + "s" : "—");
+
+      lastExport = { trace_result: tr, verdict: data.verdict, neo4j: data.neo4j };
+
+      buildGraph(g);
+      renderTimeline(g.edges || []);
+      renderFlow(g.edges || []);
+      renderAttribution(tr);
+      populateChainFilter(g);
+      resetDetails();
+      show(region);
+      switchTab("graph");
+      if (region && region.scrollIntoView) region.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     function runTrace() {
@@ -1000,7 +1375,7 @@
       if (!fam) { setStatus("That does not look like an EVM (0x…), TRON (T…) or Bitcoin (1/3/bc1…) address.", "err"); return; }
       var network = TRACE_NET[fam];
       if (runBtn) runBtn.disabled = true;
-      if (resultEl) hide(resultEl);
+      if (region) hide(region);
       setStatus("Tracing " + esc(address.slice(0, 12)) + "… on " + esc(network) + " — sealing on-chain evidence, this can take a few seconds…", null);
       fetch(endpoint, {
         method: "POST",
@@ -1010,8 +1385,8 @@
         return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
       }).then(function (r) {
         if (r.ok && r.data && r.data.success) {
-          setStatus("Trace complete — court dossier sealed.", "ok");
-          renderVerdict(r.data);
+          setStatus("Trace complete — investigation graph ready.", "ok");
+          renderInvestigation(r.data);
         } else if (r.status === 503 || (r.data && r.data.needs_config)) {
           setStatus("The trace engine is not configured on the server yet (missing ALCHEMY_API_KEY).", "err");
         } else {
@@ -1027,6 +1402,63 @@
     on(runBtn, "click", runTrace);
     on(addrInput, "keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); runTrace(); } });
     on(addrInput, "input", updateDetected);
+
+    // ── Investigation toolbar / tabs (bound once; act on the live `cy`) ──
+    qsa("[data-inv-tab]", root).forEach(function (b) { on(b, "click", function () { switchTab(b.getAttribute("data-inv-tab")); }); });
+    on(qs("[data-inv-fit]", root), "click", function () { if (cy) cy.fit(undefined, 40); });
+    qsa("[data-inv-zoom]", root).forEach(function (b) {
+      on(b, "click", function () {
+        if (!cy) return;
+        var f = b.getAttribute("data-inv-zoom") === "in" ? 1.25 : 0.8;
+        cy.zoom({ level: cy.zoom() * f, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
+        updateOverview();
+      });
+    });
+    on(qs("[data-inv-layout]", root), "change", function () { runLayout(this.value); });
+    on(qs("[data-inv-chain]", root), "change", function () {
+      if (!cy) return;
+      var val = this.value;
+      if (val === "__all__") { cy.elements().style("display", "element"); cy.fit(undefined, 40); return; }
+      cy.nodes().forEach(function (nd) { nd.style("display", nd.data("chain") === val ? "element" : "none"); });
+      cy.edges().forEach(function (ed) { ed.style("display", (ed.source().data("chain") === val && ed.target().data("chain") === val) ? "element" : "none"); });
+      cy.fit(undefined, 40);
+    });
+    on(qs("[data-inv-search]", root), "input", function () {
+      if (!cy) return;
+      var q = (this.value || "").trim().toLowerCase();
+      if (!q) { cy.elements().removeClass("faded match"); return; }
+      cy.elements().addClass("faded");
+      var matches = cy.nodes().filter(function (n) { return (n.id() + " " + (n.data("name") || "")).toLowerCase().indexOf(q) !== -1; });
+      matches.removeClass("faded").addClass("match");
+      matches.connectedEdges().removeClass("faded").connectedNodes().removeClass("faded");
+    });
+    on(qs("[data-inv-fullscreen]", root), "click", function () {
+      var wrap = qs("[data-inv-canvas-wrap]", root);
+      var target = (wrap && wrap.parentElement) || wrap; if (!target) return;
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (target.requestFullscreen) target.requestFullscreen();
+      setTimeout(function () { if (cy) { cy.resize(); cy.fit(undefined, 40); } }, 120);
+    });
+    on(qs("[data-inv-copy-subject]", root), "click", function () { var s = qs("[data-inv-subject]", root); if (s) copyText((s.textContent || "").trim()); });
+    on(qs("[data-inv-export]", root), "click", function () {
+      if (!lastExport) return;
+      try {
+        var blob = new Blob([JSON.stringify(lastExport, null, 2)], { type: "application/json" });
+        var a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+        var addr = (lastExport.trace_result && lastExport.trace_result.root_address) || "graph";
+        a.download = "trace_" + addr.slice(0, 12) + ".json";
+        document.body.appendChild(a); a.click(); a.remove();
+        showToast("Graph exported");
+      } catch (e) {}
+    });
+    on(qs("[data-inv-flow-search]", root), "input", function () {
+      var q = (this.value || "").trim().toLowerCase();
+      qsa("[data-flow-row]", root).forEach(function (r) {
+        r.style.display = (!q || (r.getAttribute("data-flow-search") || "").indexOf(q) !== -1) ? "" : "none";
+      });
+    });
+    document.addEventListener("fullscreenchange", function () { setTimeout(function () { if (cy) { cy.resize(); cy.fit(undefined, 40); } }, 120); });
+
     updateDetected();
   }
 
