@@ -137,7 +137,7 @@
               {% endif %}
             </div>
             <button type="button" data-sar-print
-              class="text-[12px] rounded-md border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 px-3 py-1.5 shrink-0">Export PDF ↓</button>
+              class="btn btn-primary shrink-0">Export PDF ↓</button>
           </div>
 
           <div class="p-5 space-y-5">
@@ -159,25 +159,25 @@
               <div class="text-[11px] uppercase tracking-widest text-emerald-300 mb-1.5">{{ ns.n }} · Accounts of interest</div>
               <div class="text-[13px] leading-relaxed" style="color: var(--text)">
                 <div class="overflow-hidden rounded-lg border" style="border-color: var(--border)">
-                  <table class="w-full text-[12.5px]">
-                    <thead class="text-left" style="background: var(--chip); color: var(--muted)">
+                  <table class="custom-table">
+                    <thead>
                       <tr>
-                        <th class="px-3 py-2 font-medium">Account</th>
-                        <th class="px-3 py-2 font-medium">Role</th>
-                        <th class="px-3 py-2 font-medium text-right">Received</th>
-                        <th class="px-3 py-2 font-medium text-right">Sent</th>
+                        <th>Account</th>
+                        <th>Role</th>
+                        <th class="text-right">Received</th>
+                        <th class="text-right">Sent</th>
                       </tr>
                     </thead>
                     <tbody>
                       {% for s in narrative.subjects %}
-                      <tr class="border-t align-top" style="border-color: var(--border); color: var(--text)">
-                        <td class="px-3 py-2 font-mono whitespace-nowrap">{{ s.account }}</td>
-                        <td class="px-3 py-2">
+                      <tr class="align-top">
+                        <td class="whitespace-nowrap"><span class="link-wallet">{{ s.account }}</span></td>
+                        <td>
                           <div style="color: var(--text-strong)">{{ s.role }}</div>
                           <div class="text-[11.5px] mt-0.5" style="color: var(--muted)">{{ s.why }}</div>
                         </td>
-                        <td class="px-3 py-2 font-mono text-right whitespace-nowrap">{{ (formatINR(s.inAmount) ~ " (" ~ s.inCount ~ ")") if s.inCount else "—" }}</td>
-                        <td class="px-3 py-2 font-mono text-right whitespace-nowrap">{{ (formatINR(s.outAmount) ~ " (" ~ s.outCount ~ ")") if s.outCount else "—" }}</td>
+                        <td class="font-mono text-right whitespace-nowrap">{{ (formatINR(s.inAmount) ~ " (" ~ s.inCount ~ ")") if s.inCount else "—" }}</td>
+                        <td class="font-mono text-right whitespace-nowrap">{{ (formatINR(s.outAmount) ~ " (" ~ s.outCount ~ ")") if s.outCount else "—" }}</td>
                       </tr>
                       {% endfor %}
                     </tbody>
@@ -245,28 +245,28 @@
               <div class="text-[11px] uppercase tracking-widest text-emerald-300 mb-1.5">{{ ns.n }} · Transactions reported</div>
               <div class="text-[13px] leading-relaxed" style="color: var(--text)">
                 <div class="overflow-hidden rounded-lg border" style="border-color: var(--border)">
-                  <table class="w-full text-[12.5px]">
-                    <thead class="text-left" style="background: var(--chip); color: var(--muted)">
+                  <table class="custom-table">
+                    <thead>
                       <tr>
-                        <th class="px-3 py-2 font-medium">Date</th>
-                        <th class="px-3 py-2 font-medium">From</th>
-                        <th class="px-3 py-2 font-medium">To</th>
-                        <th class="px-3 py-2 font-medium">Bank</th>
-                        <th class="px-3 py-2 font-medium text-right">Amount</th>
+                        <th>Date</th>
+                        <th>From</th>
+                        <th>To</th>
+                        <th>Bank</th>
+                        <th class="text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody>
                       {% for t in high_risk[:20] %}
-                      <tr class="border-t" style="border-color: var(--border); color: var(--text)">
-                        <td class="px-3 py-2 font-mono">{{ t.date }}</td>
-                        <td class="px-3 py-2">{{ t.fromAccount }}</td>
-                        <td class="px-3 py-2">{{ t.toAccount }}</td>
-                        <td class="px-3 py-2">{{ t.bank }}</td>
-                        <td class="px-3 py-2 font-mono text-right">{{ tx_amount(t) }}</td>
+                      <tr>
+                        <td class="font-mono whitespace-nowrap" style="color: var(--muted)">{{ t.date }}</td>
+                        <td><span class="link-wallet">{{ t.fromAccount }}</span></td>
+                        <td><span class="link-wallet">{{ t.toAccount }}</span></td>
+                        <td>{{ t.bank }}</td>
+                        <td class="font-mono text-right whitespace-nowrap" style="color: var(--text-strong)">{{ tx_amount(t) }}</td>
                       </tr>
                       {% endfor %}
                       {% if high_risk | length == 0 %}
-                      <tr><td colspan="5" class="px-3 py-4 text-center" style="color: var(--muted)">No high-risk transactions in your data</td></tr>
+                      <tr><td colspan="5" class="text-center" style="color: var(--muted)">No high-risk transactions in your data</td></tr>
                       {% endif %}
                     </tbody>
                   </table>
