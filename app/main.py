@@ -410,6 +410,44 @@ async def api_chat(request: Request):
     return JSONResponse(body, status_code=status, headers=headers)
 
 
+@app.post("/api/crypto-trace")
+async def api_crypto_trace(request: Request):
+    """On-chain wallet forensic trace (Hafiz's COREALGORITHM, vendored under
+    app/forensic/). Returns the engine's verdict + full court dossier as JSON.
+    The work is blocking HTTP against Alchemy/Mempool, so it runs in a threadpool
+    to keep the event loop free. This endpoint returns data only — no graph is
+    rendered here."""
+    uid = _current_uid(request)
+    if not uid:
+        return JSONResponse({"error": "Not signed in"}, status_code=401)
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    from starlette.concurrency import run_in_threadpool
+
+    from .crypto_trace import run_trace
+
+    result = await run_in_threadpool(
+        run_trace,
+        address=payload.get("address", ""),
+        network=payload.get("network", "eth-mainnet"),
+        max_depth=payload.get("max_depth", 4),
+        crime_timestamp=payload.get("crime_timestamp"),
+        pre_crime_balance=payload.get("pre_crime_balance", 0.0),
+    )
+    if result.get("success"):
+        status = 200
+    elif result.get("needs_config"):
+        status = 503  # engine unconfigured (no ALCHEMY_API_KEY)
+    elif result.get("error") == "Target wallet address is required.":
+        status = 400
+    else:
+        status = 502  # upstream / on-chain failure
+    return JSONResponse(result, status_code=status)
+
+
 # ── Mutations (Firestore writes → SQLite, all PRG) ─────────────────────────────
 @app.post("/upload")
 async def do_upload(request: Request, file: UploadFile = None):
