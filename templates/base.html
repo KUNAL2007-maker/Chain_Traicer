@@ -1,29 +1,29 @@
 <!DOCTYPE html>
-{# The Python/Jinja port of layout.tsx + AppShell.tsx + Sidebar.tsx + TopBar.tsx.
+{# The Python/Jinja port of layout.tsx + AppShell.tsx + Sidebar.tsx + TopBar.tsx,
+   re-skinned in the TRINETRA law-enforcement design language (see static/css/app.css).
    Tailwind's utilities come from the Play CDN; the inline tailwind.config below
-   reproduces tailwind.config.ts verbatim (darkMode:'class' added, since the SPA
-   set <html class="dark"> and relied on the class strategy). globals.css lives in
-   /static/css/app.css. #}
-<html lang="en" class="dark">
+   reproduces tailwind.config.ts (darkMode:'class'). globals.css lives in
+   /static/css/app.css. LIGHT is the default theme (government console); DARK is
+   preserved as the original emerald build via the header toggle. #}
+<html lang="en" class="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#07090d" />
-  <title>FinGuard Intelligence · Cross-Bank Financial Crime Command</title>
+  <meta name="theme-color" content="#f8fafc" />
+  <title>FinGuard Intelligence · Crypto Forensics Command</title>
 
   {# Theme flash guard: apply the saved theme before first paint. sessionStorage,
-     not localStorage — a fresh browser session starts dark (mirrors ThemeProvider,
-     which defaulted dark with no restore); the choice only persists across the
-     full-page navigations the SPA used to do in-memory. #}
+     not localStorage — a fresh browser session starts on the light government
+     console; the choice only persists across full-page navigations. #}
   <script>
     (function () {
       try {
         var t = sessionStorage.getItem('finguard-theme');
-        var cls = t === 'light' ? 'light' : 'dark';
+        var cls = t === 'dark' ? 'dark' : 'light';
         document.documentElement.classList.remove('light', 'dark');
         document.documentElement.classList.add(cls);
       } catch (e) {
-        document.documentElement.classList.add('dark');
+        document.documentElement.classList.add('light');
       }
     })();
   </script>
@@ -44,7 +44,7 @@
             }
           },
           fontFamily: {
-            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
             sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
           },
           boxShadow: {
@@ -73,7 +73,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/css/app.css" />
 
   <style>
@@ -88,73 +88,79 @@
 <body class="min-h-screen" style="background-color: var(--bg); color: var(--text)">
   <div class="flex h-[100dvh] overflow-hidden radial-glow" style="background-color: var(--bg)">
 
-    {# ── Sidebar (Sidebar.tsx). Off-canvas drawer below lg, static rail from lg up. #}
+    {# ── Sidebar (Sidebar.tsx), TRINETRA navy rail. Off-canvas drawer below lg,
+         static rail from lg up. Always dark navy regardless of theme. #}
     <aside id="app-nav" aria-label="Main navigation"
-      class="fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-[272px] shrink-0 flex-col border-r transition-transform duration-300 -translate-x-full lg:static lg:z-auto lg:h-full lg:w-64 lg:translate-x-0 lg:transition-none 2xl:w-72"
-      style="border-color: var(--border); background: var(--panel)">
-      <div class="px-5 pt-5 pb-4 flex items-center gap-3">
-        <div class="relative w-9 h-9 shrink-0 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-700 grid place-items-center shadow-glow">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" stroke="#052e1a" stroke-width="1.6" stroke-linejoin="round" fill="rgba(255,255,255,0.15)" />
-            <path d="M9 12l2 2 4-4" stroke="#052e1a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
+      class="tri-sidebar fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-[268px] shrink-0 flex-col transition-transform duration-300 -translate-x-full lg:static lg:z-auto lg:h-full lg:w-64 lg:translate-x-0 lg:transition-none 2xl:w-[268px]">
+
+      {# Brand #}
+      <div class="px-5 pt-5 pb-4 flex items-center gap-3 shrink-0">
+        <div class="relative w-10 h-10 shrink-0 grid place-items-center">
+          <img src="/static/assets/trinetra_logo.svg" alt="" class="w-10 h-10" />
         </div>
-        <div class="min-w-0">
-          <div class="text-[15px] font-semibold tracking-wide truncate" style="color: var(--text-strong)">
-            FinGuard <span class="text-emerald-400">Intelligence</span>
-          </div>
-          <div class="text-[10px] uppercase tracking-widest truncate" style="color: var(--muted)">
-            Consortium AML Console
-          </div>
+        <div class="min-w-0 flex-1">
+          <div class="tri-brand-name truncate">FinGuard</div>
+          <div class="tri-brand-tagline truncate">Crypto Forensics Intelligence</div>
         </div>
         <button type="button" data-nav-close aria-label="Close navigation"
-          class="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-md border transition hover:bg-[var(--hover)] lg:hidden"
-          style="border-color: var(--border); color: var(--muted)">
+          class="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-md transition lg:hidden"
+          style="color: #94a3b8">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
             <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
           </svg>
         </button>
       </div>
 
-      <div class="h-px shrink-0" style="background: var(--border)"></div>
-
-      <nav class="p-3 flex flex-col gap-1 overflow-y-auto">
+      {# Nav — the 6 command tabs #}
+      <nav class="px-3 py-2 flex flex-col gap-1 overflow-y-auto flex-1">
+        <div class="px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em]" style="color:#64748b">Investigation Suite</div>
         {% for item in NAV %}
         {% set is_active = (item.key == active) %}
         <a href="{{ item.href }}"
           {% if is_active %}aria-current="page"{% endif %}
-          class="group relative w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all {{ 'bg-emerald-500/10 border border-emerald-500/30 shadow-glow' if is_active else 'border border-transparent hover:bg-[var(--hover)]' }}"
-          style="color: {{ 'var(--text-strong)' if is_active else 'var(--muted)' }}">
-          <span class="grid place-items-center w-8 h-8 shrink-0 rounded-md {{ 'bg-emerald-500/15 text-emerald-300' if is_active else '' }}"
-            {% if not is_active %}style="background: var(--chip)"{% endif %}>
-            {{ item.icon | safe }}
-          </span>
-          <span class="flex-1 min-w-0">
-            <div class="text-sm font-medium leading-tight truncate">{{ item.label }}</div>
-            <div class="text-[11px] truncate" style="color: var(--muted-2)">{{ item.hint }}</div>
-          </span>
-          {% if is_active %}<span class="w-1.5 h-1.5 shrink-0 rounded-full bg-emerald-400 shadow-glow"></span>{% endif %}
+          class="tri-nav-item {{ 'active' if is_active }}">
+          <span class="grid place-items-center w-[18px] h-[18px] shrink-0">{{ item.icon | safe }}</span>
+          <span class="flex-1 min-w-0 truncate">{{ item.label }}</span>
+          {% if item.key == "sar" %}<span class="badge-alert-count">3</span>{% endif %}
         </a>
         {% endfor %}
       </nav>
 
-      <div class="mt-auto p-4 shrink-0">
-        <div class="rounded-xl p-3 border flex items-center gap-2" style="background: var(--chip); border-color: var(--border)">
-          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 grid place-items-center text-[11px] font-semibold text-white">
-            {{ initials(user.fullName, user.email) }}
+      {# Bottom: helpline · status · sign-out #}
+      <div class="tri-sidebar-bottom px-4 py-4 shrink-0 flex flex-col gap-3.5">
+        <div class="helpline-box">
+          <div class="helpline-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.9.36 1.79.7 2.63a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.45-1.27a2 2 0 012.11-.45c.84.34 1.73.57 2.63.7A2 2 0 0122 16.92z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
           </div>
-          <div class="flex-1 min-w-0">
-            <div class="text-[12px] truncate" style="color: var(--text)">{{ user.fullName or "User" }}</div>
-            <div class="text-[11px] truncate" style="color: var(--muted-2)">{{ user.email or "" }}</div>
+          <div class="min-w-0">
+            <div class="helpline-num">1930</div>
+            <div class="helpline-label">National Cyber Crime Helpline</div>
           </div>
-          <form method="post" action="/logout" class="contents">
-            <button type="submit" title="Sign out"
-              class="grid place-items-center w-7 h-7 rounded-md hover:bg-red-500/15 text-slate-400 hover:text-red-300 transition">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </button>
-          </form>
+        </div>
+
+        <div class="system-status">
+          <span class="status-dot"></span>
+          <span>Chain sync operational</span>
+        </div>
+
+        <form method="post" action="/logout" class="contents">
+          <button type="submit" class="tri-user-chip w-full text-left transition hover:brightness-110" title="Sign out">
+            <div class="officer-avatar" style="width:34px;height:34px;font-size:12px">{{ initials(user.fullName, user.email) }}</div>
+            <div class="flex-1 min-w-0">
+              <div class="tri-user-name truncate">{{ user.fullName or "Investigating Officer" }}</div>
+              <div class="tri-user-sub truncate">Sign out</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:#94a3b8">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+        </form>
+
+        <div class="sidebar-footer-text">
+          <span>Govt. of India · SIH 2026</span>
+          Restricted · Authorized personnel only
         </div>
       </div>
     </aside>
@@ -163,39 +169,55 @@
     <div data-nav-backdrop class="fixed inset-0 z-40 bg-black/50 lg:hidden hidden"></div>
 
     <div class="flex-1 flex flex-col min-w-0">
-      {# ── TopBar (TopBar.tsx) #}
-      <header class="shrink-0 z-20 border-b backdrop-blur" style="border-color: var(--border); background: var(--panel-strong)">
-        <div class="mx-auto w-full max-w-[1760px] {{ PAGE_GUTTER }} flex items-center gap-2 sm:gap-4 py-3">
+      {# ── TopBar (TopBar.tsx), government branding header #}
+      <header class="tri-topbar shrink-0 z-20">
+        <div class="w-full {{ PAGE_GUTTER }} flex items-center gap-3 sm:gap-4 h-16">
           <button type="button" data-nav-open aria-label="Open navigation" aria-controls="app-nav"
-            class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border transition hover:bg-[var(--hover)] lg:hidden"
-            style="border-color: var(--border); background: var(--chip); color: var(--text)">
+            class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border transition lg:hidden"
+            style="border-color: var(--border); background: var(--panel-2); color: var(--text)">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
             </svg>
           </button>
 
-          <div class="min-w-0">
-            <div class="flex items-center gap-2">
-              <div class="text-[11px] uppercase tracking-widest truncate" style="color: var(--muted)">FinGuard Intelligence</div>
-              <span class="hidden sm:inline text-[10px] rounded px-1.5 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">SECURE</span>
+          {# Government emblem + ministry branding #}
+          <div class="flex items-center gap-2.5 shrink-0">
+            <img src="/static/assets/emblem_india.svg" alt="State Emblem of India" class="h-9 w-auto" />
+            <div class="hidden md:block min-w-0">
+              <div class="gov-title-main truncate">Ministry of Home Affairs</div>
+              <div class="gov-title-sub truncate">Indian Cybercrime Coordination Centre · I4C</div>
             </div>
-            <div class="mt-0.5 text-[15px] sm:text-[18px] font-semibold leading-tight truncate" style="color: var(--text-strong)">{{ titles.title }}</div>
-            <div class="hidden sm:block text-[12px] truncate" style="color: var(--muted-2)">{{ titles.sub }}</div>
           </div>
 
-          <div class="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+          <div class="hidden lg:block w-px h-8 shrink-0" style="background: var(--border)"></div>
+
+          {# Active view title #}
+          <div class="min-w-0 hidden lg:block">
+            <div class="text-[15px] font-bold leading-tight truncate" style="color: var(--text-strong)">{{ titles.title }}</div>
+            <div class="text-[12px] truncate" style="color: var(--muted)">{{ titles.sub }}</div>
+          </div>
+
+          <div class="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+            {# Search omnibar — decorative quick-find (no global search route). #}
+            <div class="relative hidden xl:block w-64">
+              <svg class="absolute left-3 top-1/2 -translate-y-1/2" width="15" height="15" viewBox="0 0 24 24" fill="none" style="color: var(--muted-2)">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+              <input type="text" class="header-search-input" placeholder="Search wallet, tx hash, case ID…" aria-label="Search" />
+            </div>
+
             {# Live feed toggle — cosmetic in the MPA (the SPA drove a simulated
                ticker); state persisted in sessionStorage by app.js. Default ON. #}
             <button type="button" data-live-toggle aria-pressed="true"
               class="flex h-9 items-center gap-2 whitespace-nowrap rounded-lg border px-2.5 sm:px-3 transition border-emerald-500/40 bg-emerald-500/10 text-emerald-200 shadow-glow">
               <span data-live-dot class="h-2 w-2 rounded-full bg-emerald-400 animate-blink"></span>
-              <span data-live-label class="hidden sm:inline text-[12px]">Live feed · ON</span>
+              <span data-live-label class="hidden sm:inline text-[12px] font-medium">Live feed · ON</span>
             </button>
 
             {# Theme toggle — both variants rendered, CSS shows the right one. #}
-            <button type="button" data-theme-toggle
-              class="flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 sm:px-3 transition hover:bg-[var(--hover)]"
-              style="border-color: var(--border); background: var(--chip); color: var(--text)">
+            <button type="button" data-theme-toggle aria-label="Toggle theme"
+              class="notif-btn">
               <span class="theme-dark-only grid place-items-center">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                   <circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="1.6" />
@@ -207,9 +229,24 @@
                   <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
                 </svg>
               </span>
-              <span class="theme-dark-only hidden sm:inline text-[12px]">Light</span>
-              <span class="theme-light-only hidden sm:inline text-[12px]">Dark</span>
             </button>
+
+            {# Notifications #}
+            <button type="button" class="notif-btn" aria-label="Notifications">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                <path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9zM13.73 21a2 2 0 01-3.46 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span class="notif-badge">3</span>
+            </button>
+
+            {# Officer profile chip — logged-in investigator #}
+            <div class="officer-profile-chip">
+              <div class="officer-avatar">{{ initials(user.fullName, user.email) }}</div>
+              <div class="hidden sm:block leading-tight">
+                <div class="officer-name truncate max-w-[140px]">{{ user.fullName or "Investigating Officer" }}</div>
+                <div class="officer-unit truncate max-w-[140px]">Cyber Crime Unit</div>
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -224,6 +261,9 @@
      print stylesheet's `body > *:not(#sar-print-portal)` rule can hide the shell
      around it. Anything here sits outside the app chrome. #}
   {% block body_extra %}{% endblock %}
+
+  {# Global toast host (populated by app.js showToast). #}
+  <div class="toast-container" data-toast-container aria-live="polite" aria-atomic="true"></div>
 
   <script src="/static/js/app.js" defer></script>
   {% block scripts %}{% endblock %}

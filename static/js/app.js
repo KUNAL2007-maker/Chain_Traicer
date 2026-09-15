@@ -955,6 +955,61 @@
     });
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Toasts — transient confirmations rendered into [data-toast-container] (base.html).
+  // Ported from the TRINETRA reference UI; exposed on window.FinGuard for inline use.
+  // ═══════════════════════════════════════════════════════════════════════════
+  function showToast(message, opts) {
+    opts = opts || {};
+    var host = qs("[data-toast-container]");
+    if (!host) return;
+    var t = document.createElement("div");
+    t.className = "toast";
+    var iconMap = {
+      success: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#34d399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      error: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="#f87171" stroke-width="2.2" stroke-linecap="round"/></svg>',
+      info: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#38bdf8" stroke-width="1.8"/><path d="M12 11v5M12 8h.01" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"/></svg>'
+    };
+    var kind = opts.type && iconMap[opts.type] ? opts.type : "success";
+    t.innerHTML = iconMap[kind] + '<span>' + esc(message) + '</span>';
+    host.appendChild(t);
+    var ttl = typeof opts.duration === "number" ? opts.duration : 2600;
+    setTimeout(function () {
+      t.classList.add("toast-out");
+      setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 400);
+    }, ttl);
+  }
+
+  // Copy-to-clipboard chips: any [data-copy] element copies its data-copy value
+  // (or its text content) and flashes a toast. Delegated so it covers dynamically
+  // rendered rows (graph drawer, chat, etc.).
+  function initCopyActions() {
+    on(document, "click", function (e) {
+      var el = e.target.closest ? e.target.closest("[data-copy]") : null;
+      if (!el) return;
+      e.preventDefault();
+      var value = el.getAttribute("data-copy");
+      if (value == null || value === "") value = (el.textContent || "").trim();
+      if (!value) return;
+      var done = function () { showToast(el.getAttribute("data-copy-label") || "Copied to clipboard"); };
+      var fallback = function () {
+        try {
+          var ta = document.createElement("textarea");
+          ta.value = value; ta.setAttribute("readonly", "");
+          ta.style.position = "absolute"; ta.style.left = "-9999px";
+          document.body.appendChild(ta); ta.select();
+          document.execCommand("copy"); document.body.removeChild(ta);
+          done();
+        } catch (err) { showToast("Copy failed", { type: "error" }); }
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(value).then(done, fallback);
+      } else {
+        fallback();
+      }
+    });
+  }
+
   // ── boot ────────────────────────────────────────────────────────────────────
   function boot() {
     initTheme();
@@ -967,7 +1022,13 @@
     initUpload();
     initChat();
     initSar();
+    initCopyActions();
   }
+
+  // Expose a tiny public surface for inline template scripts.
+  window.FinGuard = window.FinGuard || {};
+  window.FinGuard.showToast = showToast;
+
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();

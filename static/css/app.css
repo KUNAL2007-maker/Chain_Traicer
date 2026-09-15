@@ -1,11 +1,27 @@
-/* app.css — the Python/Jinja port of src/app/globals.css.
+/* app.css — TRINETRA design system for the FinGuard / CHAIN TRAICER FastAPI+Jinja MPA.
  *
- * Tailwind's utility classes now come from the Play CDN (see base.html), so the
- * three @tailwind directives are gone and the custom utilities that lived inside
- * `@layer utilities { ... }` are written here as plain CSS (the CDN's own
- * @layer would otherwise strip rules it doesn't recognise). Every theme token,
- * light-mode override, print rule and keyframe is copied verbatim so the console
- * looks byte-for-byte identical to the Next.js build. */
+ * The console was ported from a Next.js SPA; Tailwind's utilities come from the
+ * Play CDN (see base.html). This file now carries the TRINETRA law-enforcement
+ * design language adopted from the reference UI:
+ *   - LIGHT is the default theme, retuned to TRINETRA's government palette
+ *     (bg #f8fafc, white cards, #e2e8f0 borders, brand blue #2563eb / cyan #0284c7).
+ *   - DARK is preserved as the original FinGuard emerald console (theme toggle).
+ *   - A TRINETRA component layer (sidebar, gov header, cards, tables, buttons,
+ *     pills, toasts, forms) is added; the classes are theme-aware (driven off the
+ *     surface tokens) so they read correctly in both light and dark.
+ *   - The existing JS toggles emerald Tailwind classes for "active" states; the
+ *     light-mode remap block at the bottom repaints those blue, so no JS changes
+ *     are needed for the accent shift. */
+
+/* ---------- Radii / fonts (theme-independent) ---------- */
+:root {
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
 
 /* ---------- Theme tokens ---------- */
 :root,
@@ -27,45 +43,92 @@ html.dark {
   --hover-2: rgba(255, 255, 255, 0.08);
   --chip: rgba(255, 255, 255, 0.03);
   --shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 32px -4px rgba(0, 0, 0, 0.6);
   --glow-emerald: rgba(16, 185, 129, 0.08);
   --glow-red: rgba(239, 68, 68, 0.06);
+
+  /* Accent — dark console keeps its emerald identity. */
+  --accent: #22c55e;
+  --accent-2: #10b981;
+  --accent-weak: rgba(34, 197, 94, 0.12);
+  --accent-strong: #34d399;
+  --focus-ring: rgba(16, 185, 129, 0.65);
+  --selection-bg: rgba(16, 185, 129, 0.28);
+
+  /* Status hues (shared) */
+  --success: #22c55e;
+  --success-text: #34d399;
+  --danger: #ef4444;
+  --danger-text: #f87171;
+  --warning: #f59e0b;
+  --warning-text: #fbbf24;
+  --purple: #a78bfa;
+  --info: #38bdf8;
 }
 
 html.light {
   color-scheme: light;
-  --bg: #f4f6fb;
+  /* TRINETRA government palette */
+  --bg: #f8fafc;
   --panel: #ffffff;
   --panel-2: #f8fafc;
   --panel-strong: rgba(255, 255, 255, 0.92);
   --panel-strong-2: rgba(248, 250, 252, 0.92);
-  --text: #1e293b;
+  --text: #334155;
   --text-strong: #0f172a;
   --muted: #64748b;
   --muted-2: #94a3b8;
-  --border: rgba(15, 23, 42, 0.08);
-  --border-strong: rgba(15, 23, 42, 0.16);
-  --grid-line: rgba(15, 23, 42, 0.05);
-  --hover: rgba(15, 23, 42, 0.04);
-  --hover-2: rgba(15, 23, 42, 0.08);
-  --chip: rgba(15, 23, 42, 0.04);
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --grid-line: rgba(15, 23, 42, 0.045);
+  --hover: #f1f5f9;
+  --hover-2: #e2e8f0;
+  --chip: #f1f5f9;
   --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-  --glow-emerald: rgba(16, 185, 129, 0.12);
-  --glow-red: rgba(239, 68, 68, 0.08);
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -4px rgba(15, 23, 42, 0.05);
+  --glow-emerald: rgba(37, 99, 235, 0.06);
+  --glow-red: rgba(2, 132, 199, 0.05);
+
+  /* Accent — TRINETRA brand blue / cyan. */
+  --accent: #2563eb;
+  --accent-2: #0284c7;
+  --accent-weak: #eff6ff;
+  --accent-strong: #1d4ed8;
+  --focus-ring: rgba(37, 99, 235, 0.55);
+  --selection-bg: rgba(37, 99, 235, 0.18);
+
+  --success: #10b981;
+  --success-text: #059669;
+  --danger: #ef4444;
+  --danger-text: #dc2626;
+  --warning: #f59e0b;
+  --warning-text: #b45309;
+  --purple: #8b5cf6;
+  --info: #0284c7;
 }
 
 html,
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
   transition: background-color 0.25s ease, color 0.25s ease;
 }
 
+.font-mono,
+code,
+kbd,
+samp {
+  font-family: var(--font-mono);
+}
+
 /* The app shell is exactly one viewport tall and <main> owns the scrolling, so
-   reserve the scrollbar track on that pane: without this, moving between a short
-   view (dashboard, empty state) and a tall one shifts the content ~10px sideways
-   as the bar appears. Deliberately not on <html> — the document never scrolls
-   under the fixed-height shell, so a gutter there is just a dead strip. */
+   reserve the scrollbar track on that pane to avoid a ~10px sideways shift when
+   moving between short and tall views. */
 .scroll-stable {
   scrollbar-gutter: stable;
 }
@@ -74,17 +137,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Keyboard focus. There was no visible focus ring anywhere — tabbing through
-   the sidebar, the filters or the composer left you guessing where you were.
-   :focus-visible only paints for keyboard/AT users, so mouse clicks stay clean. */
+/* Keyboard focus — accent-driven so it tracks the theme (blue in light). */
 :focus-visible {
-  outline: 2px solid rgba(16, 185, 129, 0.65);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
   border-radius: 6px;
 }
 
 ::selection {
-  background: rgba(16, 185, 129, 0.28);
+  background: var(--selection-bg);
   color: var(--text-strong);
 }
 
@@ -110,13 +171,13 @@ body {
     linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: 32px 32px;
 }
-/* background-image, not the `background` shorthand. Every element that uses
-   this class also sets `background: var(--bg)` inline, and inline wins — so
-   the shorthand version of this rule painted nothing anywhere in the app.
-   Using background-image lets the gradients layer over that flat fill. */
 .radial-glow {
   background-image: radial-gradient(1200px 600px at 10% -10%, var(--glow-emerald), transparent 60%),
     radial-gradient(900px 500px at 90% 110%, var(--glow-red), transparent 60%);
+}
+/* TRINETRA light console is deliberately flat — no ambient glow. */
+html.light .radial-glow {
+  background-image: none;
 }
 .glass {
   background: linear-gradient(180deg, var(--panel-strong), var(--panel-strong-2));
@@ -127,14 +188,17 @@ html.light .glass {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 .neon-text {
-  color: #16a34a;
-  text-shadow: 0 0 12px rgba(34, 197, 94, 0.35);
+  color: var(--accent-2);
+  text-shadow: 0 0 12px var(--accent-weak);
+}
+html.light .neon-text {
+  text-shadow: none;
 }
 .amber-text {
-  color: #d97706;
+  color: var(--warning-text);
 }
 .danger-text {
-  color: #dc2626;
+  color: var(--danger-text);
 }
 .divider {
   background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
@@ -149,41 +213,734 @@ html.light .glass {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(34, 197, 94, 0.08), transparent);
+  background: linear-gradient(90deg, transparent, var(--accent-weak), transparent);
   animation: scan 2.4s linear infinite;
   pointer-events: none;
 }
 
 /* Theme-aware surface helpers used across views */
-.surface-bg {
-  background: var(--bg);
+.surface-bg { background: var(--bg); }
+.surface-panel { background: var(--panel); }
+.surface-text { color: var(--text); }
+.surface-muted { color: var(--muted); }
+.surface-border { border-color: var(--border); }
+
+/* ==========================================================================
+   TRINETRA COMPONENT LAYER
+   Ported from the reference UI's design system. Surfaces/borders/text are
+   driven off the theme tokens so each component reads correctly in both the
+   light (TRINETRA) and dark (FinGuard) themes; brand/status hues stay fixed.
+   ========================================================================== */
+
+/* ---- Sidebar (always dark navy, both themes) ---- */
+.tri-sidebar {
+  background-color: #0f172a;
+  color: #f8fafc;
+  border-right: 1px solid #1e293b;
 }
-.surface-panel {
-  background: var(--panel);
+.tri-brand-name {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #ffffff;
+  line-height: 1.1;
 }
-.surface-text {
+.tri-brand-tagline {
+  font-size: 9.5px;
+  color: #94a3b8;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+  margin-top: 3px;
+  text-transform: uppercase;
+}
+.tri-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease-in-out;
+  position: relative;
+  cursor: pointer;
+}
+.tri-nav-item:hover {
+  background-color: #1e293b;
+  color: #f8fafc;
+}
+.tri-nav-item.active {
+  background-color: #1e293b;
+  color: #ffffff;
+  font-weight: 600;
+}
+.tri-nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  background-color: #0284c7;
+  border-radius: 0 3px 3px 0;
+}
+.tri-nav-item .tri-nav-hint {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 400;
+}
+.tri-nav-item.active .tri-nav-hint {
+  color: #7dd3fc;
+}
+.badge-alert-count {
+  margin-left: auto;
+  background-color: var(--danger);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+}
+.tri-sidebar-bottom {
+  background-color: #0d1527;
+  border-top: 1px solid #1e293b;
+}
+.helpline-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  background-color: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.helpline-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(2, 132, 199, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+.helpline-num {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+}
+.helpline-label {
+  font-size: 10px;
+  color: #94a3b8;
+}
+.system-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #10b981;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.7);
+  animation: pulse-dot 2s infinite ease-in-out;
+}
+.sidebar-footer-text {
+  font-size: 10px;
+  color: #64748b;
+  line-height: 1.4;
+}
+.sidebar-footer-text span {
+  display: block;
+  color: #94a3b8;
+  font-weight: 600;
+}
+/* User chip / logout inside the navy sidebar */
+.tri-user-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+}
+.tri-user-name { font-size: 12.5px; color: #f8fafc; font-weight: 600; }
+.tri-user-sub { font-size: 11px; color: #94a3b8; }
+
+/* ---- Top header (government branding) ---- */
+.tri-topbar {
+  background-color: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.gov-title-main {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: -0.2px;
+}
+.gov-title-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.header-search-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 14px 0 38px;
+  background-color: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--text-strong);
+  outline: none;
+  transition: all 0.2s ease;
+}
+.header-search-input::placeholder { color: var(--muted-2); }
+.header-search-input:focus {
+  background-color: var(--panel);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-weak);
+}
+.notif-btn {
+  position: relative;
+  background: transparent;
+  border: 1px solid var(--border);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--muted);
+  transition: background 0.15s;
+}
+.notif-btn:hover { background-color: var(--hover); color: var(--text-strong); }
+.notif-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background-color: var(--danger);
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 700;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--panel);
+}
+.officer-profile-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 8px 4px 4px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.officer-profile-chip:hover { background-color: var(--hover); }
+.officer-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background-color: #0369a1;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.officer-name { font-size: 13px; font-weight: 700; color: var(--text-strong); }
+.officer-unit { font-size: 11px; color: var(--muted); }
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn-secondary {
+  background-color: var(--panel);
+  border-color: var(--border-strong);
   color: var(--text);
 }
-.surface-muted {
-  color: var(--muted);
+.btn-secondary:hover {
+  background-color: var(--panel-2);
+  border-color: var(--muted-2);
+  color: var(--text-strong);
 }
-.surface-border {
-  border-color: var(--border);
+.btn-dark {
+  background-color: #0f172a;
+  color: #ffffff;
+}
+.btn-dark:hover { background-color: #1e293b; }
+.btn-primary {
+  background-color: var(--accent);
+  color: #ffffff;
+}
+.btn-primary:hover { background-color: var(--accent-strong); }
+.btn-danger {
+  background-color: var(--danger);
+  color: #ffffff;
+}
+.btn-danger:hover { filter: brightness(0.94); }
+.btn-action-full {
+  width: 100%;
+  justify-content: center;
+  padding: 10px 16px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.icon-btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.icon-btn-ghost:hover { background-color: var(--hover); color: var(--text-strong); }
+
+/* ---- Panel cards ---- */
+.panel-card {
+  background-color: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.panel-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.panel-title-wrapper { display: flex; align-items: center; gap: 10px; }
+.panel-title { font-size: 15px; font-weight: 700; color: var(--text-strong); }
+.panel-subtitle { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.panel-controls { display: flex; align-items: center; gap: 10px; }
+.panel-body { padding: 20px; }
+
+.view-toggle-group {
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--chip);
+  padding: 3px;
+  border-radius: var(--radius-sm);
+}
+.toggle-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+.toggle-btn.active {
+  background-color: var(--panel);
+  color: var(--text-strong);
+  box-shadow: var(--shadow-sm);
 }
 
-/* Light-mode overrides for classes we can't easily change everywhere */
+/* ---- KPI cards ---- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.kpi-card {
+  background-color: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.kpi-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.kpi-icon-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.kpi-icon-circle.blue { background-color: rgba(37, 99, 235, 0.1); color: #2563eb; }
+.kpi-icon-circle.purple { background-color: rgba(139, 92, 246, 0.1); color: #8b5cf6; }
+.kpi-icon-circle.green { background-color: rgba(16, 185, 129, 0.1); color: #10b981; }
+.kpi-icon-circle.danger { background-color: rgba(239, 68, 68, 0.1); color: #ef4444; }
+.kpi-icon-circle.amber { background-color: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+.kpi-info { display: flex; flex-direction: column; gap: 3px; width: 100%; }
+.kpi-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+.kpi-val-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.kpi-value { font-size: 20px; font-weight: 800; color: var(--text-strong); letter-spacing: -0.3px; }
+.kpi-pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-full); }
+.kpi-pill.green { background-color: rgba(16, 185, 129, 0.12); color: var(--success-text); }
+.kpi-pill.danger { background-color: rgba(239, 68, 68, 0.12); color: var(--danger-text); }
+.kpi-subtext { font-size: 12px; color: var(--muted-2); font-weight: 500; }
+.kpi-subtext.confidence-alert { color: var(--danger-text); font-weight: 700; }
+
+/* ---- Two-column layout ---- */
+.main-two-col {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.left-column, .right-column { display: flex; flex-direction: column; gap: 20px; }
+
+/* ---- Tables ---- */
+.table-responsive { width: 100%; overflow-x: auto; }
+.custom-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+.custom-table th {
+  background-color: var(--panel-2);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 11.5px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.custom-table td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+.custom-table tr:last-child td { border-bottom: none; }
+.custom-table tr:hover td { background-color: var(--hover); }
+.link-hash, .link-wallet {
+  color: var(--accent);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+.link-hash:hover, .link-wallet:hover { text-decoration: underline; color: var(--accent-strong); }
+.chain-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+}
+
+/* ---- Pills / badges ---- */
+.pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.pill-confirmed, .badge-ready, .badge-kyc-high {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: var(--success-text);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  display: inline-block;
+}
+.pill-danger {
+  background-color: rgba(239, 68, 68, 0.12);
+  color: var(--danger-text);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+.pill-warning {
+  background-color: rgba(245, 158, 11, 0.12);
+  color: var(--warning-text);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+.pill-info {
+  background-color: rgba(2, 132, 199, 0.1);
+  color: var(--info);
+  border: 1px solid rgba(2, 132, 199, 0.25);
+}
+.badge-status {
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.badge-status.active {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: var(--success-text);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+
+/* ---- Forms ---- */
+.form-group { margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
+.form-label { font-size: 12px; font-weight: 600; color: var(--text); }
+.form-input, .form-select, .form-textarea {
+  padding: 0 12px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background-color: var(--panel-2);
+  color: var(--text-strong);
+  outline: none;
+  transition: all 0.15s ease;
+  font-family: var(--font-sans);
+}
+.form-textarea { height: auto; padding: 10px 12px; resize: vertical; }
+.form-input::placeholder, .form-textarea::placeholder { color: var(--muted-2); }
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  background-color: var(--panel);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-weak);
+}
+.form-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---- Filter / scenario pills ---- */
+.filter-btn {
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.filter-btn:hover { color: var(--text-strong); }
+.filter-btn.active {
+  background-color: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+html.dark .filter-btn.active {
+  background-color: var(--accent-weak);
+  color: var(--accent-strong);
+  border-color: var(--accent);
+}
+.preset-pill, .scenario-pill-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  background-color: var(--panel-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.preset-pill:hover, .scenario-pill-btn:hover {
+  background-color: var(--accent-weak);
+  color: var(--accent-2);
+  border-color: var(--accent);
+}
+
+/* ---- Diagnostic terminal (dark in both themes) ---- */
+.diagnostic-terminal {
+  background-color: #0f172a;
+  border-radius: var(--radius-md);
+  border: 1px solid #1e293b;
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 16px;
+  overflow-y: auto;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.term-line { line-height: 1.6; }
+.term-line.info { color: #38bdf8; }
+.term-line.success { color: #34d399; }
+.term-line.warn { color: #fbbf24; }
+.term-line.error { color: #f87171; }
+
+/* ---- AI insight bullets ---- */
+.ai-bullets-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; }
+.ai-bullets-list li {
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.45;
+  position: relative;
+  padding-left: 16px;
+}
+.ai-bullets-list li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  top: -1px;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+/* ---- Legend / zoom (graph canvas footer) ---- */
+.graph-legend { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); font-weight: 500; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background-color: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+}
+.zoom-btn {
+  width: 26px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 3px;
+}
+.zoom-btn:hover { background-color: var(--hover-2); color: var(--text-strong); }
+.zoom-label { font-size: 11px; font-weight: 600; color: var(--muted); padding: 0 6px; }
+
+/* ---- Detail rows (key/value lists) ---- */
+.detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.detail-label { color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+.detail-val { font-weight: 600; color: var(--text-strong); display: flex; align-items: center; gap: 6px; }
+
+/* ---- Toasts ---- */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.toast {
+  background-color: #0f172a;
+  color: #ffffff;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: toast-in 0.25s ease forwards;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.toast.toast-out { opacity: 0; transform: translateY(20px); }
+
+/* ==========================================================================
+   LIGHT-MODE TAILWIND REMAPS
+   The templates and app.js use emerald/sky/amber Tailwind utilities baked in
+   from the dark console. Under the TRINETRA light theme, remap emerald "active"
+   states to brand blue, and darken pale accent shades for contrast. Scoped to
+   html.light so the signed-off dark theme is untouched.
+   ========================================================================== */
+
+/* Surfaces that referenced the old finguard palette */
 html.light .bg-finguard-bg { background-color: var(--bg) !important; }
 html.light .bg-finguard-panel\/70 { background-color: var(--panel-strong) !important; }
 html.light .bg-finguard-panel { background-color: var(--panel) !important; }
 
-/* Tweak text-slate-* readability under light mode */
+/* Emerald → brand blue (the JS toggles these for active/live/filter states) */
+html.light .bg-emerald-500\/10 { background-color: rgba(37, 99, 235, 0.1) !important; }
+html.light .bg-emerald-500\/15 { background-color: rgba(37, 99, 235, 0.12) !important; }
+html.light .border-emerald-500\/25 { border-color: rgba(37, 99, 235, 0.28) !important; }
+html.light .border-emerald-500\/30 { border-color: rgba(37, 99, 235, 0.32) !important; }
+html.light .border-emerald-500\/40 { border-color: rgba(37, 99, 235, 0.4) !important; }
+html.light .text-emerald-200 { color: #1d4ed8 !important; }
+html.light .text-emerald-300 { color: #1d4ed8 !important; }
+html.light .text-emerald-400 { color: #2563eb !important; }
+html.light .bg-emerald-400 { background-color: #2563eb !important; }
+html.light .from-emerald-400 { --tw-gradient-from: #38bdf8 var(--tw-gradient-from-position) !important; }
+html.light .to-emerald-700 { --tw-gradient-to: #0284c7 var(--tw-gradient-to-position) !important; }
+html.light .shadow-glow { box-shadow: 0 0 20px rgba(37, 99, 235, 0.2) !important; }
+
+/* Text-slate readability under light */
 html.light .text-slate-200 { color: #1e293b; }
 html.light .text-slate-300 { color: #334155; }
 html.light .text-slate-400 { color: #475569; }
 html.light .text-slate-500 { color: #64748b; }
 html.light .text-white { color: #0f172a; }
 
-/* White overlays used for hover / chips — dampen them on light bg */
+/* White overlays used for hover / chips — dampen on light */
 html.light .bg-white\/\[0\.02\] { background-color: rgba(15, 23, 42, 0.03) !important; }
 html.light .bg-white\/\[0\.03\] { background-color: rgba(15, 23, 42, 0.04) !important; }
 html.light .bg-white\/\[0\.04\] { background-color: rgba(15, 23, 42, 0.05) !important; }
@@ -205,35 +962,23 @@ html.light .bg-black\/50 { background-color: rgba(15, 23, 42, 0.15) !important; 
 /* Cards / graph canvas fills */
 html.light .fill-\[\#0d1117\] { fill: #ffffff; }
 
-/* Pale accent lettering (Tailwind *-100/-200/-300 shades) assumes the dark
-   panels the app shipped with; on light surfaces those shades fall below
-   legible contrast. Remap each to a darker sibling of the same hue family.
-   Every rule in this block is scoped to html.light, so dark mode — already
-   signed off as perfect — cannot match any of them. */
+/* Pale accent lettering remaps for light surfaces */
 html.light .text-red-300 { color: #b91c1c; }
 html.light .text-red-200 { color: #b91c1c; }
-html.light .text-emerald-300 { color: #047857; }
-html.light .text-emerald-200 { color: #047857; }
 html.light .text-sky-300 { color: #0369a1; }
 html.light .text-sky-200 { color: #075985; }
 html.light .text-sky-100 { color: #075985; }
 html.light .text-amber-300 { color: #b45309; }
 html.light .text-amber-200 { color: #b45309; }
 
-/* SVG lettering is painted with presentation attributes, which ordinary class
-   rules cannot reach — select on the attribute value instead. */
-html.light svg text[fill="#ffffff"] { fill: #0f172a; } /* hover label */
-html.light svg text[fill="#7dd3fc"] { fill: #075985; } /* named/pinned label */
-html.light svg text[fill="#e2e8f0"] { fill: #334155; } /* hub label */
-html.light svg text[fill="#94a3b8"] { fill: #64748b; } /* default + cluster meta */
-html.light circle[fill="#0d1117"] { fill: #ffffff; }   /* node discs */
+/* SVG lettering painted with presentation attributes */
+html.light svg text[fill="#ffffff"] { fill: #0f172a; }
+html.light svg text[fill="#7dd3fc"] { fill: #075985; }
+html.light svg text[fill="#e2e8f0"] { fill: #334155; }
+html.light svg text[fill="#94a3b8"] { fill: #64748b; }
+html.light circle[fill="#0d1117"] { fill: #ffffff; }
 
-/* The graph's floating HUD chips deliberately keep dark glass in BOTH themes —
-   they sit directly on the raw canvas where a white chip would wash out like a
-   missing map control. Because their background stays dark, their lettering
-   must NOT inherit the pale-accent remaps above (those assume a light panel
-   underneath). Pin the chips back to light text; !important is required to
-   outrank both the remaps and the right chip's inline var(--text). */
+/* Graph HUD chips keep dark glass in BOTH themes (they sit on the raw canvas). */
 html.light .graph-hud {
   background: rgba(15, 23, 42, 0.78) !important;
   color: #e2e8f0 !important;
@@ -242,13 +987,6 @@ html.light .graph-hud {
 html.light .graph-hud.text-red-300 { color: #fca5a5 !important; }
 
 /* ---------- Print: the SAR document only ---------- */
-/* window.print() on its own hands the printer the whole dashboard — sidebar,
-   topbar, buttons and a dark background that eats a cartridge. The report is
-   rendered a second time into a portal hanging directly off <body>, so the
-   print rule is a single unambiguous swap: drop every other top-level node and
-   show that one. Trying to isolate the on-screen copy instead means hiding
-   siblings all the way up an ancestor chain that lives in AppShell, outside
-   this view — one layout change there and the export breaks silently. */
 #sar-print-portal {
   display: none;
 }
@@ -275,7 +1013,7 @@ html.light .graph-hud.text-red-300 { color: #fca5a5 !important; }
     display: block !important;
     background: #fff;
     color: #000;
-    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-sans);
     font-size: 10pt;
     line-height: 1.5;
   }
@@ -303,8 +1041,6 @@ html.light .graph-hud.text-red-300 { color: #fca5a5 !important; }
     break-inside: avoid;
     page-break-inside: avoid;
   }
-  /* A long transaction table has to be allowed to run over a page break;
-     everything else is short enough to keep whole. */
   #sar-print-portal section.sar-flow {
     break-inside: auto;
     page-break-inside: auto;
@@ -346,7 +1082,21 @@ html.light .graph-hud.text-red-300 { color: #fca5a5 !important; }
   }
 }
 
+/* ---------- Keyframes ---------- */
 @keyframes scan {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
+}
+@keyframes pulse-dot {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+@keyframes toast-in {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes modal-enter {
+  from { transform: scale(0.95) translateY(10px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
 }

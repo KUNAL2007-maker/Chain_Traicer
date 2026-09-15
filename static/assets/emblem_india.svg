@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 220" fill="none">
+  <!-- State Emblem of India (Ashoka Lion Capital Representation) -->
+  <g id="ashoka-capital" stroke="#1e293b" stroke-width="2" fill="#334155">
+    <!-- Top Central Lion -->
+    <path d="M 80 25 C 70 25 65 35 65 48 C 65 58 70 65 73 70 C 68 70 62 75 62 82 C 62 90 68 95 72 95 C 70 100 70 110 74 118 L 86 118 C 90 110 90 100 88 95 C 92 95 98 90 98 82 C 98 75 92 70 87 70 C 90 65 95 58 95 48 C 95 35 90 25 80 25 Z" fill="#1e293b"/>
+    <!-- Left Lion -->
+    <path d="M 52 42 C 45 42 40 50 40 60 C 40 70 45 78 50 82 C 45 84 42 90 42 96 C 42 104 48 110 54 114 L 66 114 C 62 108 60 98 62 90 C 58 86 56 80 56 72 C 56 60 62 50 66 46 Z" fill="#334155"/>
+    <!-- Right Lion -->
+    <path d="M 108 42 C 115 42 120 50 120 60 C 120 70 115 78 110 82 C 115 84 118 90 118 96 C 118 104 112 110 106 114 L 94 114 C 98 108 100 98 98 90 C 102 86 104 80 104 72 C 104 60 98 50 94 46 Z" fill="#334155"/>
+    <!-- Mane details and crowns -->
+    <circle cx="80" cy="38" r="4" fill="#64748b"/>
+    <circle cx="50" cy="52" r="3" fill="#64748b"/>
+    <circle cx="110" cy="52" r="3" fill="#64748b"/>
+
+    <!-- Abacus Platform -->
+    <rect x="35" y="118" width="90" height="24" rx="3" fill="#1e293b"/>
+    <!-- Central Ashoka Chakra on Abacus -->
+    <circle cx="80" cy="130" r="9" stroke="#ffffff" stroke-width="1.8" fill="none"/>
+    <circle cx="80" cy="130" r="2.5" fill="#ffffff"/>
+    <line x1="80" y1="121" x2="80" y2="139" stroke="#ffffff" stroke-width="1.2"/>
+    <line x1="71" y1="130" x2="89" y2="130" stroke="#ffffff" stroke-width="1.2"/>
+    <line x1="73.6" y1="123.6" x2="86.4" y2="136.4" stroke="#ffffff" stroke-width="1.2"/>
+    <line x1="73.6" y1="136.4" x2="86.4" y2="123.6" stroke="#ffffff" stroke-width="1.2"/>
+
+    <!-- Galloping Horse (Left) & Bull (Right) representations on Abacus -->
+    <path d="M 45 132 C 48 128 52 128 55 132 C 52 134 48 134 45 132 Z" fill="#94a3b8"/>
+    <path d="M 105 132 C 108 128 112 128 115 132 C 112 134 108 134 105 132 Z" fill="#94a3b8"/>
+
+    <!-- Inverted Lotus Base -->
+    <path d="M 40 142 C 40 162 120 162 120 142 Z" fill="#334155"/>
+    <path d="M 50 142 C 55 158 70 160 80 160 C 90 160 105 158 110 142 Z" fill="#1e293b"/>
+
+    <!-- Motto: Satyameva Jayate Banner -->
+    <rect x="25" y="172" width="110" height="22" rx="4" fill="#0f172a"/>
+    <text x="80" y="187" font-family="'Inter', sans-serif" font-size="11" font-weight="700" text-anchor="middle" fill="#f8fafc" letter-spacing="1.5">सत्यमेव जयते</text>
+  </g>
+</svg>
