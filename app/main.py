@@ -414,6 +414,7 @@ async def api_crypto_trace(request: Request):
 
     from starlette.concurrency import run_in_threadpool
 
+    from . import graph_store
     from .crypto_trace import run_trace
 
     result = await run_in_threadpool(
@@ -424,6 +425,16 @@ async def api_crypto_trace(request: Request):
         crime_timestamp=payload.get("crime_timestamp"),
         pre_crime_balance=payload.get("pre_crime_balance", 0.0),
     )
+    # Mirror the trace graph into Neo4j when a graph store is configured. This is
+    # optional and fails soft (see app/graph_store.py): a missing driver / config
+    # / server never fails the API — the browser still renders the graph from the
+    # trace_result below. The status is echoed so the UI can show a store chip.
+    if result.get("success") and isinstance(result.get("trace_result"), dict):
+        result["neo4j"] = await run_in_threadpool(
+            graph_store.persist_trace, uid, result["trace_result"]
+        )
+    else:
+        result["neo4j"] = graph_store.status()
     if result.get("success"):
         status = 200
     elif result.get("needs_config"):

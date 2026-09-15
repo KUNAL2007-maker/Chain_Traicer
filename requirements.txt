@@ -11,3 +11,6 @@ itsdangerous>=2.1
 python-dotenv>=1.0
 # On-chain forensic engine (app/forensic/) — Alchemy/Mempool JSON-RPC over HTTP.
 requests>=2.31
+# Optional: Neo4j graph store for trace persistence (app/graph_store.py). The app
+# runs fine without it — the sink fails soft when the driver/config is absent.
+neo4j>=5.14
