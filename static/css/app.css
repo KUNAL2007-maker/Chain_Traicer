@@ -933,6 +933,7 @@ html.light .border-emerald-500\/30 { border-color: rgba(37, 99, 235, 0.32) !impo
 html.light .border-emerald-500\/40 { border-color: rgba(37, 99, 235, 0.4) !important; }
 html.light .border-emerald-500 { border-color: #2563eb !important; }
 html.light .hover\:bg-emerald-500\/25:hover { background-color: rgba(37, 99, 235, 0.2) !important; }
+html.light .hover\:border-emerald-500\/50:hover { border-color: rgba(37, 99, 235, 0.5) !important; }
 html.light .text-emerald-200 { color: #1d4ed8 !important; }
 html.light .text-emerald-300 { color: #1d4ed8 !important; }
 html.light .text-emerald-400 { color: #2563eb !important; }
