@@ -239,27 +239,27 @@
         <div class="text-[11px] font-mono tabular-nums" style="color: var(--muted)"><span data-edge-events>{{ graph.edges | length }}</span> events</div>
       </div>
       <div class="max-h-[340px] overflow-auto">
-        <table class="w-full text-[12px]">
+        <table class="custom-table">
           <thead class="sticky top-0 z-10">
-            <tr class="text-left text-[10.5px] uppercase tracking-widest backdrop-blur" style="color: var(--muted); background: var(--panel-strong)">
-              <th class="px-4 py-2 font-medium whitespace-nowrap">Time</th>
-              <th class="px-4 py-2 font-medium">From</th>
-              <th class="px-4 py-2 font-medium">To</th>
-              <th class="px-4 py-2 font-medium text-right whitespace-nowrap">Amount</th>
-              <th class="px-4 py-2 font-medium">Severity</th>
-              <th class="px-4 py-2 font-medium">Note</th>
+            <tr>
+              <th class="whitespace-nowrap">Time</th>
+              <th>From</th>
+              <th>To</th>
+              <th class="text-right whitespace-nowrap">Amount</th>
+              <th>Severity</th>
+              <th>Note</th>
             </tr>
           </thead>
           <tbody>
             {% for e in graph.edges %}
             {% set s = node_index[e.source] %}{% set t = node_index[e.target] %}
-            <tr class="border-t hover:bg-[var(--hover)]" style="border-color: var(--border)" data-edge-log-row data-edge-id="{{ e.id }}">
-              <td class="px-4 py-2 font-mono whitespace-nowrap tabular-nums" style="color: var(--muted)">{{ e.timestamp }}</td>
-              <td class="px-4 py-2 font-mono" style="color: var(--text)">{{ s.hash if s else e.source }}</td>
-              <td class="px-4 py-2 font-mono" style="color: var(--text)">{{ t.hash if t else e.target }}</td>
-              <td class="px-4 py-2 text-right font-mono whitespace-nowrap tabular-nums">{{ formatINR(e.amount) if e.currency == 'INR' else e.currency ~ ' ' ~ format_en_in(e.amount) }}</td>
-              <td class="px-4 py-2">{{ severity_badge(e.severity) }}</td>
-              <td class="px-4 py-2" style="color: var(--muted)">{{ e.note or '—' }}</td>
+            <tr data-edge-log-row data-edge-id="{{ e.id }}">
+              <td class="font-mono whitespace-nowrap tabular-nums" style="color: var(--muted)">{{ e.timestamp }}</td>
+              <td><span class="link-hash">{{ s.hash if s else e.source }}</span></td>
+              <td><span class="link-hash">{{ t.hash if t else e.target }}</span></td>
+              <td class="text-right font-mono whitespace-nowrap tabular-nums" style="color: var(--text-strong)">{{ formatINR(e.amount) if e.currency == 'INR' else e.currency ~ ' ' ~ format_en_in(e.amount) }}</td>
+              <td>{{ severity_badge(e.severity) }}</td>
+              <td style="color: var(--muted)">{{ e.note or '—' }}</td>
             </tr>
             {% endfor %}
           </tbody>
