@@ -72,18 +72,18 @@
 
       {# Desktop: bounded scroll table with pinned header (hidden below lg). #}
       <div class="hidden overflow-auto max-h-[calc(100vh-260px)] lg:block" data-tx-desktop>
-        <table class="w-full text-[13px]">
+        <table class="custom-table">
           <thead class="sticky top-0 z-10">
-            <tr class="text-[11px] uppercase tracking-widest text-left backdrop-blur" style="background: var(--panel-strong); color: var(--muted)">
-              <th class="px-4 py-2.5 font-medium whitespace-nowrap">Date</th>
-              <th class="px-4 py-2.5 font-medium">From</th>
-              <th class="px-4 py-2.5 font-medium">To</th>
-              <th class="px-4 py-2.5 font-medium">Bank</th>
-              <th class="px-4 py-2.5 font-medium text-right whitespace-nowrap">Amount</th>
-              <th class="px-4 py-2.5 font-medium">Type</th>
-              <th class="px-4 py-2.5 font-medium">Risk</th>
-              <th class="px-4 py-2.5 font-medium">Pattern</th>
-              <th class="px-4 py-2.5 font-medium text-right">Action</th>
+            <tr>
+              <th>Date</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Bank</th>
+              <th class="text-right">Amount</th>
+              <th>Type</th>
+              <th>Risk</th>
+              <th>Pattern</th>
+              <th class="text-right">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -93,17 +93,17 @@
             <tr class="border-t hover:bg-[var(--hover)] transition" style="border-color: var(--border); color: var(--text)"
                 data-tx-row data-tx-sev-val="{{ t.severity }}"
                 data-tx-search="{{ (t.fromAccount ~ ' ' ~ t.toAccount ~ ' ' ~ (t.bank or '') ~ ' ' ~ (t.note or '') ~ ' ' ~ (p.label if p else '') ~ ' ' ~ amt_str) | lower }}">
-              <td class="px-4 py-2.5 font-mono text-[12px] whitespace-nowrap tabular-nums">{{ t.date }}</td>
-              <td class="px-4 py-2.5">{{ t.fromAccount }}</td>
-              <td class="px-4 py-2.5">{{ t.toAccount }}</td>
-              <td class="px-4 py-2.5">{{ t.bank }}</td>
-              <td class="px-4 py-2.5 text-right font-mono whitespace-nowrap tabular-nums">{{ tx_amount(t) }}</td>
-              <td class="px-4 py-2.5 text-[12px] whitespace-nowrap" style="color: var(--muted)">{{ t.type }}</td>
-              <td class="px-4 py-2.5">{{ severity_badge(t.severity) }}</td>
-              <td class="px-4 py-2.5">
+              <td class="font-mono text-[12px] whitespace-nowrap tabular-nums" style="color: var(--muted)">{{ t.date }}</td>
+              <td><span class="link-wallet">{{ t.fromAccount }}</span></td>
+              <td><span class="link-wallet">{{ t.toAccount }}</span></td>
+              <td>{{ t.bank }}</td>
+              <td class="text-right font-mono whitespace-nowrap tabular-nums" style="color: var(--text-strong)">{{ tx_amount(t) }}</td>
+              <td class="text-[12px] whitespace-nowrap" style="color: var(--muted)">{{ t.type }}</td>
+              <td>{{ severity_badge(t.severity) }}</td>
+              <td>
                 {% if p %}<span class="inline-block rounded px-1.5 py-0.5 text-[10.5px] font-medium whitespace-nowrap" style="background: {{ p.color }}22; color: {{ p.color }}">{{ p.label }}</span>{% else %}<span class="text-[12px]" style="color: var(--muted)">—</span>{% endif %}
               </td>
-              <td class="px-4 py-2.5 text-right">
+              <td class="text-right">
                 <form method="post" action="/transactions/delete" data-confirm="Delete this transaction?">
                   <input type="hidden" name="id" value="{{ t.id }}" />
                   <button type="submit" class="rounded-md border border-transparent px-2 py-1 text-[11px] text-red-400/70 transition hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300">Delete</button>
