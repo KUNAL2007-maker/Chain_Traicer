@@ -51,12 +51,12 @@
       <span class="text-[11px] uppercase tracking-widest text-emerald-300">AI explanation</span>
       <span class="shrink-0 text-[10px] rounded px-1.5 py-0.5 bg-emerald-500/15 border border-emerald-500/25 text-emerald-300">{{ d.confidence }}% confident</span>
     </div>
-    <div class="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3">
+    <div class="mt-2 rounded-lg border border-emerald-500/20 p-3" style="background: rgba(37, 99, 235, 0.05)">
       <p class="text-[13.5px] leading-snug" style="color: var(--text-strong)">{{ d.read.line }}</p>
       {% if d.read.facts %}
       <ul class="mt-2 space-y-1">
         {% for f in d.read.facts %}
-        <li class="flex gap-1.5 text-[12px]" style="color: var(--muted)"><span class="text-emerald-400/70">·</span><span>{{ f }}</span></li>
+        <li class="flex gap-1.5 text-[12px]" style="color: var(--muted)"><span style="color: var(--accent)">·</span><span>{{ f }}</span></li>
         {% endfor %}
       </ul>
       {% endif %}
@@ -143,13 +143,13 @@
 <div class="shrink-0 border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))]" style="border-color: var(--border); background: var(--panel-strong)">
   {% if d.existing %}
   <div class="flex items-center gap-2">
-    <div class="flex-1 min-w-0 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12.5px] text-emerald-200">✓ Report filed · {{ d.existing.status }}</div>
+    <div class="flex-1 min-w-0 rounded-lg border px-3 py-2 text-[12.5px]" style="border-color: rgba(16,185,129,0.32); background: rgba(16,185,129,0.10); color: #047857">✓ Report filed · {{ d.existing.status }}</div>
     <a href="/sar?selected={{ d.existing.id }}" class="shrink-0 rounded-lg border px-3 py-2 text-[13px] hover:bg-[var(--hover)] transition" style="border-color: var(--border); color: var(--text); background: var(--chip)">Open →</a>
   </div>
   {% else %}
   <form method="post" action="/sar/create">
     <input type="hidden" name="account" value="{{ n.id }}" />
-    <button type="submit" class="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 px-3 py-2 text-[13px] text-emerald-200 shadow-glow transition">Escalate to SAR →</button>
+    <button type="submit" class="btn btn-primary btn-action-full">Escalate to SAR →</button>
   </form>
   {% endif %}
 </div>
