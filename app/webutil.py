@@ -453,6 +453,111 @@ def parse_csv(text: str) -> tuple[list[dict], list[str]]:
     return rows, warnings
 
 
+# ── Crypto wallet address detection (CSV → suspect wallet address) ─────────────
+# An uploaded CSV's from/to columns may carry on-chain wallet addresses rather
+# than bank accounts. These helpers classify each endpoint by chain family so the
+# Upload tab can convert a CSV into the suspect wallet address the on-chain trace
+# engine (POST /api/crypto-trace) expects, and pick the trace network from the
+# address family. Bank account numbers, names and blanks all fall through.
+_EVM_ADDR_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
+_TRON_ADDR_RE = re.compile(r"^T[1-9A-HJ-NP-Za-km-z]{33}$")
+_BTC_LEGACY_RE = re.compile(r"^[13][1-9A-HJ-NP-Za-km-z]{25,39}$")
+_BTC_BECH32_RE = re.compile(r"^bc1[ac-hj-np-z02-9]{11,71}$")
+
+# Trace network passed to the forensic engine for each detected family. EVM
+# defaults to Ethereum mainnet; the engine re-classifies by address prefix and
+# also serves the other EVM chains (bnb/polygon/arb/base) for the same 0x… form.
+WALLET_FAMILY_NETWORK = {
+    "EVM": "eth-mainnet",
+    "TRON": "tron-mainnet",
+    "BTC": "btc-mainnet",
+}
+
+
+def classify_wallet_address(value: str) -> Optional[str]:
+    """Return the chain family of an on-chain wallet address — ``"EVM"``,
+    ``"TRON"`` or ``"BTC"`` — or ``None`` when the token is not a recognisable
+    address."""
+    v = (value or "").strip()
+    if not v:
+        return None
+    if _EVM_ADDR_RE.match(v):
+        return "EVM"
+    if _TRON_ADDR_RE.match(v):
+        return "TRON"
+    if v.lower().startswith("bc1"):
+        return "BTC" if _BTC_BECH32_RE.match(v.lower()) else None
+    if _BTC_LEGACY_RE.match(v):
+        return "BTC"
+    return None
+
+
+def _endpoint_fields(row) -> tuple[str, str, float]:
+    """Read (from, to, amount) from either a parsed CSV row dict or a stored
+    Transaction object, so wallet detection works on both."""
+    if isinstance(row, dict):
+        frm = row.get("fromAccount") or row.get("from") or ""
+        to = row.get("toAccount") or row.get("to") or ""
+        amount = row.get("amount") or 0.0
+    else:
+        frm = getattr(row, "fromAccount", "") or ""
+        to = getattr(row, "toAccount", "") or ""
+        amount = getattr(row, "amount", 0.0) or 0.0
+    try:
+        amount = float(amount)
+    except (TypeError, ValueError):
+        amount = 0.0
+    return frm, to, amount
+
+
+def detect_wallet_addresses(rows) -> list[dict]:
+    """Scan CSV rows / transactions for on-chain wallet addresses in their from
+    and to endpoints and aggregate them into ranked suspect candidates.
+
+    Each candidate is ``{address, family, network, label, sent_count,
+    recv_count, tx_count, out_amount, in_amount, total_amount}``. Sorted so the
+    most trace-worthy suspect — the address that *sends* the most value, i.e. the
+    head of an outbound laundering flow — comes first, ready to prefill the
+    suspect-wallet input of the on-chain trace."""
+    agg: dict[str, dict] = {}
+    for row in rows:
+        frm, to, amount = _endpoint_fields(row)
+        for raw_addr, direction in ((frm, "out"), (to, "in")):
+            addr = (raw_addr or "").strip()
+            family = classify_wallet_address(addr)
+            if not family:
+                continue
+            cand = agg.get(addr)
+            if cand is None:
+                cand = agg[addr] = {
+                    "address": addr,
+                    "family": family,
+                    "network": WALLET_FAMILY_NETWORK[family],
+                    "sent_count": 0,
+                    "recv_count": 0,
+                    "out_amount": 0.0,
+                    "in_amount": 0.0,
+                }
+            if direction == "out":
+                cand["sent_count"] += 1
+                cand["out_amount"] += amount
+            else:
+                cand["recv_count"] += 1
+                cand["in_amount"] += amount
+
+    candidates: list[dict] = []
+    for cand in agg.values():
+        cand["tx_count"] = cand["sent_count"] + cand["recv_count"]
+        cand["total_amount"] = cand["out_amount"] + cand["in_amount"]
+        cand["label"] = f"{cand['address'][:6]}…{cand['address'][-4:]}"
+        candidates.append(cand)
+    candidates.sort(
+        key=lambda c: (c["out_amount"], c["tx_count"], c["total_amount"]),
+        reverse=True,
+    )
+    return candidates
+
+
 # ── SAR: ring walk (was SARReports.tsx ringOf) ─────────────────────────────────
 def ring_of(transactions: list[Transaction], account: str) -> list[Transaction]:
     """Every transfer in the same connected component as `account`. BFS over the

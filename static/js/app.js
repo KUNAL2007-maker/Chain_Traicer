@@ -516,6 +516,8 @@
       if (rows.length > 8) { if (moreEl) moreEl.textContent = "…and " + (rows.length - 8) + " more rows not shown here"; show(moreEl); }
       else { hide(moreEl); }
       show(preview);
+      // Feed any on-chain wallet addresses in this file to the trace panel.
+      if (_uploadTraceSink) _uploadTraceSink(detectWalletAddresses(rows));
     }
     function handleFiles(files) {
       var file = files && files[0];
@@ -536,6 +538,8 @@
       hide(preview); hide(warnings); hide(highwrap); hide(moreEl);
       if (resetBtn) hide(resetBtn);
       if (fallback) hide(fallback);
+      // Restore the server-derived wallet candidates (from stored transactions).
+      if (_uploadTraceSink) _uploadTraceSink([]);
     }
 
     on(drop, "click", function () { input.click(); });
@@ -1010,6 +1014,175 @@
     });
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // On-chain wallet trace — the Upload tab converts a CSV into the suspect wallet
+  // address, then feeds it to the forensic engine (POST /api/crypto-trace). This
+  // renders the textual court dossier only; the network graph is deferred.
+  // ═══════════════════════════════════════════════════════════════════════════
+  var TRACE_NET = { EVM: "eth-mainnet", TRON: "tron-mainnet", BTC: "btc-mainnet" };
+  var _uploadTraceSink = null; // initCryptoTrace publishes a candidate renderer here
+
+  function classifyWalletAddress(v) {
+    v = (v || "").trim();
+    if (!v) return null;
+    if (/^0x[0-9a-fA-F]{40}$/.test(v)) return "EVM";
+    if (/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(v)) return "TRON";
+    var lo = v.toLowerCase();
+    if (lo.indexOf("bc1") === 0) return /^bc1[ac-hj-np-z02-9]{11,71}$/.test(lo) ? "BTC" : null;
+    if (/^[13][1-9A-HJ-NP-Za-km-z]{25,39}$/.test(v)) return "BTC";
+    return null;
+  }
+
+  function detectWalletAddresses(rows) {
+    var agg = {};
+    (rows || []).forEach(function (r) {
+      [[r.fromAccount, "out"], [r.toAccount, "in"]].forEach(function (pair) {
+        var addr = (pair[0] || "").trim();
+        var fam = classifyWalletAddress(addr);
+        if (!fam) return;
+        var c = agg[addr] || (agg[addr] = { address: addr, family: fam, network: TRACE_NET[fam], sent: 0, recv: 0, out: 0, inn: 0 });
+        var amt = Number(r.amount) || 0;
+        if (pair[1] === "out") { c.sent++; c.out += amt; } else { c.recv++; c.inn += amt; }
+      });
+    });
+    return Object.keys(agg).map(function (k) {
+      var c = agg[k];
+      c.tx = c.sent + c.recv; c.total = c.out + c.inn;
+      c.label = c.address.slice(0, 6) + "…" + c.address.slice(-4);
+      return c;
+    }).sort(function (a, b) { return (b.out - a.out) || (b.tx - a.tx) || (b.total - a.total); });
+  }
+
+  function initCryptoTrace() {
+    var root = qs("[data-trace-root]");
+    if (!root) return;
+    var endpoint = root.getAttribute("data-trace-endpoint") || "/api/crypto-trace";
+    var candWrap = qs("[data-trace-candidates]", root);
+    var emptyEl = qs("[data-trace-empty]", root);
+    var addrInput = qs("[data-trace-address-input]", root);
+    var netInput = qs("[data-trace-network-input]", root);
+    var runBtn = qs("[data-trace-run]", root);
+    var statusEl = qs("[data-trace-status]", root);
+    var resultEl = qs("[data-trace-result]", root);
+    var serverCandsHTML = candWrap ? candWrap.innerHTML : "";
+
+    function candChipHtml(c) {
+      return '<button type="button" data-trace-candidate data-trace-address="' + esc(c.address) + '" data-trace-network="' + esc(c.network) + '"' +
+        ' class="rounded-lg border px-3 py-2 text-left transition hover:bg-[var(--hover)]" style="border-color: var(--border); background: var(--chip)">' +
+        '<div class="flex items-center gap-2">' +
+        '<span class="rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide" style="background: var(--accent-weak); color: var(--accent-2)">' + esc(c.family) + '</span>' +
+        '<span class="font-mono text-[12px]" style="color: var(--text)">' + esc(c.label) + '</span></div>' +
+        '<div class="mt-1 text-[10.5px]" style="color: var(--muted-2)">' + c.sent + ' out · ' + c.recv + ' in</div></button>';
+    }
+
+    function selectCandidate(address, network) {
+      if (addrInput) addrInput.value = address || "";
+      if (netInput && network) netInput.value = network;
+    }
+
+    function renderCandidates(list) {
+      if (!candWrap) return;
+      if (list && list.length) {
+        candWrap.innerHTML = list.slice(0, 12).map(candChipHtml).join("");
+        show(candWrap); if (emptyEl) hide(emptyEl);
+        selectCandidate(list[0].address, list[0].network);
+      } else {
+        candWrap.innerHTML = serverCandsHTML;
+        if (serverCandsHTML.replace(/\s/g, "")) { show(candWrap); if (emptyEl) hide(emptyEl); }
+        else { hide(candWrap); if (emptyEl) show(emptyEl); }
+      }
+    }
+
+    // Candidate clicks are event-delegated so replaced innerHTML keeps working.
+    on(candWrap, "click", function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest("[data-trace-candidate]") : null;
+      if (!btn || !candWrap.contains(btn)) return;
+      selectCandidate(btn.getAttribute("data-trace-address"), btn.getAttribute("data-trace-network"));
+      if (addrInput) addrInput.focus();
+    });
+
+    function setStatus(html, tone) {
+      if (!statusEl) return;
+      statusEl.innerHTML = html;
+      statusEl.style.borderColor = tone === "err" ? "rgba(239,68,68,0.45)" : tone === "ok" ? "rgba(34,197,94,0.45)" : "var(--border)";
+      show(statusEl);
+    }
+    function fmt(n, cur) {
+      try { return (cur === "usd" ? "$" : "₹") + Number(n || 0).toLocaleString(cur === "usd" ? "en-US" : "en-IN", { maximumFractionDigits: cur === "usd" ? 2 : 0 }); }
+      catch (e) { return (cur === "usd" ? "$" : "₹") + (n || 0); }
+    }
+
+    function renderVerdict(data) {
+      var tr = data.trace_result || {};
+      var v = data.verdict || {};
+      var cert = data.section_63_certificate || {};
+      var g = tr.graph || {};
+      var vasps = tr.attributed_vasps || [];
+      var primary = vasps[0] ? (vasps[0].vasp_name || vasps[0].name || "—") : "None";
+      var badge = tr.verdict_badge || v.verdict_badge || "TRACE COMPLETE";
+      var conf = (tr.confidence_score != null ? tr.confidence_score + "%" : "") + (tr.confidence_tier ? " · " + tr.confidence_tier : "");
+      var story = v.plain_english_story || "";
+      var tiles = [
+        ["Network", tr.network || "—"],
+        ["Graph", ((g.nodes || []).length) + " nodes · " + ((g.edges || []).length) + " edges"],
+        ["Seizure quantum", fmt(tr.total_seizure_quantum_usd, "usd") + " · " + fmt(tr.total_seizure_quantum_inr)],
+        ["Primary VASP", primary],
+        ["Evidence sealed", ((tr.evidence_ledger || []).length) + " payloads"],
+        ["Section 63 SHA-256", cert.master_evidence_hash || "—"]
+      ];
+      var html = '<div class="rounded-lg border p-4" style="border-color: var(--border); background: var(--chip)">' +
+        '<div class="flex items-center gap-2 flex-wrap">' +
+        '<span class="rounded px-2 py-0.5 text-[11px] font-semibold" style="background: var(--accent-weak); color: var(--accent-2)">' + esc(badge) + '</span>' +
+        (conf ? '<span class="text-[11.5px]" style="color: var(--muted-2)">' + esc(conf) + '</span>' : '') + '</div>' +
+        (story ? '<p class="mt-2 text-[12.5px]" style="color: var(--text)">' + esc(story) + '</p>' : '') +
+        '<div class="mt-3 grid gap-2 sm:grid-cols-2">' +
+        tiles.map(function (t) {
+          return '<div class="rounded-lg border px-3 py-2" style="border-color: var(--border); background: var(--panel)">' +
+            '<div class="text-[10px] uppercase tracking-widest" style="color: var(--muted)">' + esc(t[0]) + '</div>' +
+            '<div class="mt-0.5 text-[12px] font-mono break-all" style="color: var(--text)">' + esc(String(t[1])) + '</div></div>';
+        }).join("") + '</div>' +
+        '<div class="mt-3 text-[11px]" style="color: var(--muted-2)">Network-graph visualization is pending — it will be built on your instruction.</div></div>';
+      if (resultEl) { resultEl.innerHTML = html; show(resultEl); }
+    }
+
+    function runTrace() {
+      var address = addrInput ? addrInput.value.trim() : "";
+      if (!address) { setStatus("Enter or pick a suspect wallet address first.", "err"); return; }
+      if (!classifyWalletAddress(address)) { setStatus("That does not look like an EVM (0x…), TRON (T…) or Bitcoin (1/3/bc1…) address.", "err"); return; }
+      var network = netInput ? netInput.value : "eth-mainnet";
+      if (runBtn) runBtn.disabled = true;
+      if (resultEl) hide(resultEl);
+      setStatus("Tracing " + esc(address.slice(0, 12)) + "… on " + esc(network) + " — sealing on-chain evidence, this can take a few seconds…", null);
+      fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: address, network: network, max_depth: 4 })
+      }).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
+      }).then(function (r) {
+        if (r.ok && r.data && r.data.success) {
+          setStatus("Trace complete — court dossier sealed.", "ok");
+          renderVerdict(r.data);
+        } else if (r.status === 503 || (r.data && r.data.needs_config)) {
+          setStatus("The trace engine is not configured on the server yet (missing ALCHEMY_API_KEY).", "err");
+        } else {
+          setStatus("Trace failed: " + esc((r.data && r.data.error) || ("HTTP " + r.status)), "err");
+        }
+      }).catch(function (err) {
+        setStatus("Trace request failed: " + esc(err && err.message ? err.message : String(err)), "err");
+      }).then(function () {
+        if (runBtn) runBtn.disabled = false;
+      });
+    }
+
+    on(runBtn, "click", runTrace);
+    on(addrInput, "keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); runTrace(); } });
+
+    // Publish the candidate renderer so the CSV preview can push file-derived
+    // wallets in before the file is even uploaded.
+    _uploadTraceSink = renderCandidates;
+  }
+
   // ── boot ────────────────────────────────────────────────────────────────────
   function boot() {
     initTheme();
@@ -1020,6 +1193,7 @@
     initTransactions();
     initGraph();
     initUpload();
+    initCryptoTrace();
     initChat();
     initSar();
     initCopyActions();

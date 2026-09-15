@@ -325,6 +325,9 @@ def upload(request: Request):
             "uploads": uploads,
             "txs": txs,
             "history": webutil.upload_history(uploads, txs) if tab == "history" else None,
+            # Suspect wallet addresses extracted from imported data — the Upload
+            # tab converts these into the input for the on-chain trace engine.
+            "wallets": webutil.detect_wallet_addresses(txs),
         }
     )
     return templates.TemplateResponse(request, "upload.html", ctx)
